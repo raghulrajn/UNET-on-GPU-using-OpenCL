@@ -1,4 +1,4 @@
-# OpenCL
+# High Performance programming for GPU using OpenCL 
 
 ## Installation of OpenCL in ubuntu 
 ```console
