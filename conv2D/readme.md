@@ -9,5 +9,8 @@ Implemented 4D initialisation of tensor
 ### Installation of eigen library for matrix operations
 
 ```console
-foo@bar:~$sudo apt-get install libeigen3-dev
+sudo apt-get install libeigen3-dev
 ```
+
+### Link to documentation
+[Link](https://docs.google.com/document/d/1qH3mKdrBO7R1P-sYfWqf-k0hHxdn1PYL75xTPcQsFmI/)
