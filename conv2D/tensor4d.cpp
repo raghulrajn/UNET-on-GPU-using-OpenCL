@@ -1,6 +1,6 @@
-#include <iostream>
-#include <vector>
-#include <Eigen/Dense>
+#include<iostream>
+#include<vector>
+#include<Eigen/Dense>
 
 class Tensor4D {
 private:
@@ -24,6 +24,23 @@ public:
             tensor4d[i].resize(c);  // Resize each batch to hold 'c' channels
             for (int j = 0; j < c; ++j) {
                 tensor4d[i][j] = Eigen::MatrixXf::Zero(h, w);  // Initialize each matrix to zeros
+            }
+        }
+    }
+
+    void resizeMatrices(int new_height, int new_width) {
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < c; ++j) {
+                tensor4d[i][j].conservativeResize(new_height, new_width);  // Resize while preserving existing data
+                tensor4d[i][j]= Eigen::MatrixXf::Zero(new_height, new_width);
+            }
+        }
+    }
+
+    void resizeTensor(int new_dim, int new_channel) {
+        for (int i = 0; i < new_dim; ++i) {
+            for (int j = 0; j < new_channel; ++j) {
+                tensor4d[i][j].conservativeResize(h, w);  // Resize while preserving existing data
             }
         }
     }
@@ -145,28 +162,30 @@ public:
 
 };
 
-// Example usage
-int main() {
-    int N = 1;  // Batch size
-    int C = 1;  // Channels
-    int H = 3;  // Height
-    int W = 3;  // Width
+// int main() {
+//     int N = 1;  // Batch size
+//     int C = 1;  // Channels
+//     int H = 3;  // Height
+//     int W = 3;  // Width
 
-    Tensor4D input_tensor1(N, C, H, W);
-    Tensor4D input_tensor2(N, C, H, W);
+//     Tensor4D input_tensor1(N, C, H, W);
+//     Tensor4D input_tensor2(N, C, H, W);
 
-    // Initialize one of the matrices with random values
-    input_tensor1(0, 0) = Eigen::MatrixXf::Random(H, W);
-    input_tensor2(0, 0) = Eigen::MatrixXf::Random(H, W);
+//     // Initialize one of the matrices with random values
+//     input_tensor1(0, 0) = Eigen::MatrixXf::Random(H, W);
+//     input_tensor2(0, 0) = Eigen::MatrixXf::Random(H, W);
 
-    Tensor4D add  = input_tensor1 + input_tensor2;
+//     input_tensor2(0, 0)(0,0) = 100;
+//     input_tensor2(0, 0)(0,1) = 200;
 
-    std::cout << "Initialized Tensor4D:\n";
-    std::cout << add.dimension(0)<<"\n";
-    std::cout << add.dimension(1)<<"\n";
-    std::cout << add.dimension(2)<<"\n";
-    std::cout << add.dimension(3)<<"\n";
-    add.print();
+//     Tensor4D add  = input_tensor1 + input_tensor2;
 
-    return 0;
-}
+//     std::cout << "Initialized Tensor4D:\n";
+//     std::cout << add.dimension(0)<<"\n";
+//     std::cout << add.dimension(1)<<"\n";
+//     std::cout << add.dimension(2)<<"\n";
+//     std::cout << add.dimension(3)<<"\n";
+//     add.print();
+
+//     return 0;
+// }
