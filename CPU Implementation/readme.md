@@ -1,4 +1,4 @@
-## Conv2D implementation in OpenCL
+# Conv2D implementation in CPU
 
 ### Features
 
@@ -10,6 +10,12 @@ Implemented 4D initialisation of tensor
 
 ```console
 sudo apt-get install libeigen3-dev
+```
+
+### To read [pre-trained kernels](https://github.com/milesial/Pytorch-UNet)
+
+```
+git clone https://github.com/rogersce/cnpy.git
 ```
 
 ### Link to documentation

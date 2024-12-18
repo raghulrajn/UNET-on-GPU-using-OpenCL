@@ -15,3 +15,5 @@ foo@bar:~$
   Platform Version                                OpenCL 3.0 
   Platform Profile                                FULL_PROFILE
 ```
+
+
