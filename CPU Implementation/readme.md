@@ -16,6 +16,16 @@ sudo apt-get install libeigen3-dev
 
 ```
 git clone https://github.com/rogersce/cnpy.git
+cd cnpy
+mkdir -p build
+cd build
+cmake ..
+make
+```
+Export cnpy to build path
+```
+export LD_LIBRARY_PATH=cnpy/build:$LD_LIBRARY_PATH
+chmod +r cnpy/build/libcnpy.a
 ```
 
 ### Link to documentation
