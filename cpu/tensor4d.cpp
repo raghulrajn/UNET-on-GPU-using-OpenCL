@@ -28,6 +28,16 @@ public:
         }
     }
 
+    // Constructor for 4D Tensor with 1 Dimension (1,C, H, W)
+    Tensor4D(int channels, int height, int width)
+        : Tensor4D(1, channels, height, width) {}
+
+    //shape method to return the shape of the tensor as tuple(n,c,h,w)
+    std::tuple<int, int, int, int> shape() const {
+        return std::make_tuple(this->n, this->c, this->h, this->w);
+    }
+
+    //Resize the matrix inside the tensor i.e to modify the h and w of a tensor. Modifies the shape in place and set the value to zero
     void resizeMatrices(int new_height, int new_width) {
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < c; ++j) {
@@ -37,17 +47,14 @@ public:
         }
     }
 
-    void resizeTensor(int new_dim, int new_channel) {
-        for (int i = 0; i < new_dim; ++i) {
-            for (int j = 0; j < new_channel; ++j) {
-                tensor4d[i][j].conservativeResize(h, w);  // Resize while preserving existing data
-            }
-        }
-    }
-
-    // Constructor for 3D Tensor (C, H, W)
-    Tensor4D(int channels, int height, int width)
-        : Tensor4D(1, channels, height, width) {}
+    //Resize the tensor dimension and channels i.e to modify the n and c of a tensor.
+    // void resizeTensor(int new_dim, int new_channel) {
+    //     for (int i = 0; i < new_dim; ++i) {
+    //         for (int j = 0; j < new_channel; ++j) {
+    //             tensor4d[i][j].conservativeResize(h, w);  // Resize while preserving existing data
+    //         }
+    //     }
+    // }
 
     // Accessor for the tensor data
     Eigen::MatrixXf& operator()(int i, int j) {
@@ -68,12 +75,13 @@ public:
         }
     }
 
-     size_t dimension(size_t index) const {
+    // Method to get each dimension of the tensor
+    size_t dimension(size_t index) const {
     switch(index) {
-        case 0: return n;
-        case 1: return c;
-        case 2: return h;
-        case 3: return w;
+        case 0: return n; //dimension
+        case 1: return c; //channel
+        case 2: return h; //height
+        case 3: return w; //width
         default: throw std::out_of_range("Invalid dimension index");
          }
     }
@@ -158,8 +166,48 @@ public:
         return result;
     }
 
+    //Applies relu activation for the tensor4D object inplace
+    void relu() {
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < c; ++j) {
+                tensor4d[i][j] = tensor4d[i][j].cwiseMax(0.0f);
+            }
+        }
+    }
 
+    //Applies Batch normalisation to the tensor4D object inplace
+    void batch_normalize(float epsilon = 1e-5) {
+        // Initialize gamma and beta if they are not provided
+        Eigen::VectorXf gamma, beta;
+        if (gamma.size() == 0) gamma = Eigen::VectorXf::Ones(c);
+        if (beta.size() == 0) beta = Eigen::VectorXf::Zero(c);
 
+        //Normalize values for the all the features (channels) after convolution operation
+        for (int channel = 0; channel < c; ++channel) {
+            // Calculate mean and variance across the batch for each channel
+            Eigen::MatrixXf sum = Eigen::MatrixXf::Zero(h, w);
+            Eigen::MatrixXf sum_sq = Eigen::MatrixXf::Zero(h, w);
+
+            // Accumulate sums
+            for (int batch = 0; batch < n; ++batch) {
+                sum += tensor4d[batch][channel];
+                sum_sq += tensor4d[batch][channel].array().square().matrix();
+            }
+
+            Eigen::MatrixXf mean = sum / n;
+            Eigen::MatrixXf variance = (sum_sq / n) - mean.array().square().matrix();
+
+            // Normalize each batch and apply gamma and beta
+            for (int batch = 0; batch < n; ++batch) {
+                tensor4d[batch][channel] = ((tensor4d[batch][channel] - mean).array() / (variance.array().sqrt() + epsilon)).matrix();
+                tensor4d[batch][channel] = (gamma(channel) * tensor4d[batch][channel]).array() + beta(channel);
+            }
+        }
+    }
+
+    void printShape(){
+        std::cout<<"("<<n<<","<<c<<","<<h<<","<<w<<")"<<std::endl;
+    }
 };
 
 // int main() {
