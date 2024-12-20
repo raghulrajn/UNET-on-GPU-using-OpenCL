@@ -59,7 +59,6 @@ class Conv2D{
             int channels = inputTensor.dimension(1);
             int h = inputTensor.dimension(2);
             int w = inputTensor.dimension(3);
-            std::cout<<h<<"  "<<w<<std::endl;
             if (h==w && h%2 != 0 && w%2!=0){
                 h = h-1;
                 w = w-1;
@@ -275,7 +274,6 @@ class Conv2D{
             int stride = 1;
 
             Tensor4D filters = loadKernelFromModel(filename);
-            filters.printShape();
             
             int out_channels = filters.dimension(0);
             int in_channels  = filters.dimension(1);
@@ -292,26 +290,6 @@ class Conv2D{
             
             Tensor4D outputTensor(dim, out_channels, out_h, out_w);
 
-            // for (int i = 0; i < dim; i++) {
-            //     int rows = 0;
-            //     int cols = 0;
-            //     for (int j = 0; j < out_channels; j++) {
-            //         while(rows<h_in - (kernel_size-1)){
-            //             while(cols<w_in-(kernel_size-1))
-            //             {
-            //                 double d_p = dot(inputTensor(i,j).block<3,3>(rows,cols), filters(i,j));
-            //                 cols+=stride;
-            //                 outputTensor(i, j)(row_stride,col_stride) = d_p;
-            //                 col_stride++;
-            //             }
-            //             rows+=stride;
-            //             cols=0;
-            //             row_stride++;
-            //             col_stride = 0;
-            //     }
-            //     }
-            // }
-
             for (int b = 0; b < dim; b++) {  // For each batch
                 for (int f = 0; f < out_channels; f+=1) {  // For each filter (output channel)
                     Eigen::MatrixXf result = Eigen::MatrixXf::Zero(out_h, out_w);
@@ -319,13 +297,10 @@ class Conv2D{
                         for (int j = 0; j <= w_in - ker_w; j += stride) {
                             float sum = 0.0;
                             for (int ch = 0; ch < in_channels; ++ch) {  // For each input channel
-                                // std::cout<<b<<" "<<f<<" "<<i <<" "<<j<<" "<<ch<<std::endl;
                                 Eigen::MatrixXf inputRegion = inputTensor(b,ch).block(i, j, ker_h, ker_w);
-                                // std::cout<<b<<" "<<f<<std::endl;
                                 sum+=dot(inputRegion, filters(f,ch));
-                                // sum += (inputRegion.array() * filters(b,f).array()).sum();
+
                             }
-                            // std::cout<<b<<" "<<f<<" "<<i <<" "<<j<<" "<<std::endl;
                             result(i / stride, j / stride) = sum;
                         }
                     }
@@ -446,23 +421,35 @@ class Conv2D{
 
             int dec_dim      = decoder.dimension(0);
             int dec_channels = decoder.dimension(1);
-            int dec_h        = decoder.dimension(2);
-            int dec_w        = decoder.dimension(3);
+            const int dec_h  = decoder.dimension(2);
+            const int dec_w  = decoder.dimension(3);
+            int rows, cols;
 
-            if (enc_dim != dec_dim || enc_h != dec_h || enc_w != dec_w) {
-                std::ostringstream error_message;
-                error_message << "Unsupported kernel shape: Encoder shape(" << enc_dim << "x" << enc_channels << "x" << enc_h <<"x" << enc_w <<")\
-                                    and Decoder shape(" << dec_dim << "x" << dec_channels << "x" << dec_h <<"x" << dec_w <<")"<<std::endl;
-                throw std::runtime_error(error_message.str());
+            // if (enc_dim != dec_dim || enc_h != dec_h || enc_w != dec_w) {
+            //     std::ostringstream error_message;
+            //     error_message << "Unsupported kernel shape: Encoder shape(" << enc_dim << "x" << enc_channels << "x" << enc_h <<"x" << enc_w <<")\
+            //                         and Decoder shape(" << dec_dim << "x" << dec_channels << "x" << dec_h <<"x" << dec_w <<")"<<std::endl;
+            //     throw std::runtime_error(error_message.str());
+            // }
+
+            if(dec_h>enc_h)
+            {
+            rows = int((dec_h-enc_h)/2)-1;
+            cols = int((dec_w-enc_w)/2)-1;
             }
-
+            else{
+                 rows = 0;
+                 cols = 0;
+            }
+            std::cout<<rows<<" "<<cols<<std::endl;
             Tensor4D concatTensor(dec_dim, enc_channels+dec_channels, dec_h, dec_w);
+            concatTensor.printShape();
             for(int d=0; d<dec_dim;d++){
                 for(int c=0;c<enc_channels;c++){
-                    concatTensor(d,c) = encoder(d,c);
+                    concatTensor(d,c) = encoder(d,c).block(rows,cols, dec_h,dec_w);
                 }
                 for(int c=enc_channels;c<enc_channels+dec_channels;c++){
-                    concatTensor(d,c) = encoder(d,c);
+                    concatTensor(d,c) = decoder(d,c-enc_channels);
                 }
             }
             return concatTensor;
@@ -473,18 +460,92 @@ class Conv2D{
 int main(){
     int N = 1;  // Batch size
     int C = 3;  // Channels
-    int H = 256;  // Height
-    int W = 256;  // Width
+    int H = 64;  // Height
+    int W = 64;  // Width
 
     Tensor4D input(N, C, H, W);
-    // Tensor4D input_tensor2(N, C, H, W);
 
     // Initialize one of the matrices with random values
-    input(0, 0) = Eigen::MatrixXf::Random(H, W);
-
     Conv2D nn = Conv2D();
+    input(0, 0) = Eigen::MatrixXf::Random(H, W);
+   
+    std::cout<<"inc_double_conv_0"<<std::endl;
     Tensor4D s1 = nn.conv2d(input,"inc_double_conv_0");
+    s1.batch_normalize();
     s1.relu();
     s1.printShape();
+    std::cout<<"inc_double_conv_3"<<std::endl;
+    Tensor4D s2 = nn.conv2d(s1,"inc_double_conv_3");
+    s2.batch_normalize();
+    s2.relu();
+    s2.printShape();
+    std::cout<<"MaxPooling"<<std::endl;
+    Tensor4D s3 = nn.maxpool2d(s2);
+    s3.printShape();
+    std::cout<<"down1_maxpool_conv_1_double_conv_0"<<std::endl;
+    Tensor4D s4 = nn.conv2d(s3,"down1_maxpool_conv_1_double_conv_0");
+    s4.batch_normalize();
+    s4.relu();
+    s4.printShape();
+    std::cout<<"down1_maxpool_conv_1_double_conv_3"<<std::endl;
+    Tensor4D s5 = nn.conv2d(s4,"down1_maxpool_conv_1_double_conv_3");
+    s5.batch_normalize();
+    s5.relu();
+    s5.printShape();
+
+    std::cout<<"MaxPooling"<<std::endl;
+    Tensor4D s6 = nn.maxpool2d(s5);
+    s6.printShape();
+    std::cout<<"down2_maxpool_conv_1_double_conv_0"<<std::endl;
+    Tensor4D s7 = nn.conv2d(s6,"down2_maxpool_conv_1_double_conv_0");
+    s7.batch_normalize();
+    s7.relu();
+    s7.printShape();
+    std::cout<<"down2_maxpool_conv_1_double_conv_3"<<std::endl;
+    Tensor4D s8 = nn.conv2d(s7,"down2_maxpool_conv_1_double_conv_3");
+    s8.batch_normalize();
+    s8.relu();
+    s8.printShape();
+
+    std::cout<<"MaxPooling"<<std::endl;
+    Tensor4D s9 = nn.maxpool2d(s8);
+    s9.printShape();
+    std::cout<<"down3_maxpool_conv_1_double_conv_0"<<std::endl;
+    Tensor4D s10 = nn.conv2d(s9,"down3_maxpool_conv_1_double_conv_0");
+    s10.batch_normalize();
+    s10.relu();
+    s10.printShape();
+    std::cout<<"down3_maxpool_conv_1_double_conv_3"<<std::endl;
+    Tensor4D s11 = nn.conv2d(s10,"down3_maxpool_conv_1_double_conv_3");
+    s11.batch_normalize();
+    s11.relu();
+    s11.printShape();
+
+    std::cout<<"MaxPooling"<<std::endl;
+    Tensor4D s12 = nn.maxpool2d(s11);
+    s12.printShape();
+    std::cout<<"down4_maxpool_conv_1_double_conv_0"<<std::endl;
+    Tensor4D s13 = nn.conv2d(s12,"down4_maxpool_conv_1_double_conv_0");
+    s13.batch_normalize();
+    s13.relu();
+    s13.printShape();
+    std::cout<<"down4_maxpool_conv_1_double_conv_3"<<std::endl;
+    Tensor4D s14 = nn.conv2d(s13,"down4_maxpool_conv_1_double_conv_3");
+    s14.batch_normalize();
+    s14.relu();
+    s14.printShape();
+
+    // std::cout<<"up1_conv_double_conv_0"<<std::endl;
+    // Tensor4D s16 = nn.conv2d(xx,"up1_conv_double_conv_0");
+    // s16.batch_normalize();
+    // s16.relu();
+    // s16.printShape();
+
+    // std::cout<<"up1_conv_double_conv_3"<<std::endl;
+    // Tensor4D s17 = nn.conv2d(s16,"up1_conv_double_conv_3");
+    // s17.batch_normalize();
+    // s17.relu();
+    // s17.printShape();
+
     return 0;
 }
