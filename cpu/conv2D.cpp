@@ -9,6 +9,7 @@
 #include <string>
 #include <filesystem>
 #include "cnpy/cnpy.h"
+#include <chrono>
 // g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o conv conv2D.cpp kernel_loader.cpp cnpy/build/libcnpy.a -lz
 class Conv2D{
 
@@ -132,6 +133,7 @@ class Conv2D{
             } else {
                 throw std::runtime_error("Unsupported kernel shape.");
             }
+           
             //load the kernel from npy file into Tensor4D object manually
             Tensor4D kernel(n,c,h,w);
             float* data = arr.data<float>();
@@ -236,17 +238,14 @@ class Conv2D{
             {
                 for (int i = 0; i < dim; i++) 
                 {
-                    // std::cout<<"dim = "<<i<<"\n";
                     int rows = 0;
                     int cols = 0;
                     for (int j = 0; j < channels; j++) 
                     {
-                    // std::cout<<"channel = "<<j<<"\n";
                     while(rows<h_in - (kernel_size-1))
                     {
                         while(cols<w_in-(kernel_size-1))
                         {
-                            // std::cout<<"rows = "<<rows<<" cols = "<<cols<<"\n";
                             double d_p = dot(inputTensor(i,j).block<3,3>(rows,cols), filters[dim]);
                             cols+=stride;
                             outputTensor(i, j)(row_stride,col_stride) = d_p;
@@ -265,7 +264,8 @@ class Conv2D{
         return outputTensor;
         }
 
-        Tensor4D conv2d(Tensor4D &inputTensor, std::string filename, bool bias=false){
+        Tensor4D conv2d(Tensor4D inputTensor, std::string filename, bool bias=false){
+            //without & is little faster - 7955ms
             int dim      = inputTensor.dimension(0);
             int channels = inputTensor.dimension(1);
             int h_in     = inputTensor.dimension(2);
@@ -289,7 +289,7 @@ class Conv2D{
             int out_w = (w_in - ker_w) / stride + 1;
             
             Tensor4D outputTensor(dim, out_channels, out_h, out_w);
-
+            
             for (int b = 0; b < dim; b++) {  // For each batch
                 for (int f = 0; f < out_channels; f+=1) {  // For each filter (output channel)
                     Eigen::MatrixXf result = Eigen::MatrixXf::Zero(out_h, out_w);
@@ -297,8 +297,9 @@ class Conv2D{
                         for (int j = 0; j <= w_in - ker_w; j += stride) {
                             float sum = 0.0;
                             for (int ch = 0; ch < in_channels; ++ch) {  // For each input channel
-                                Eigen::MatrixXf inputRegion = inputTensor(b,ch).block(i, j, ker_h, ker_w);
-                                sum+=dot(inputRegion, filters(f,ch));
+                                Eigen::MatrixXf inputRegion = inputTensor(b,ch).block(i, j, 3, 3);
+                                // sum+=dot(inputRegion, filters(f,ch)); //slower operation
+                                sum += (inputRegion.array() * filters(f, ch).array()).sum(); //faster operation
 
                             }
                             result(i / stride, j / stride) = sum;
@@ -457,83 +458,124 @@ class Conv2D{
 
 };
 
+class Timer {
+private:
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::string name;
+
+public:
+    Timer(const std::string& function_name = "Function") : name(function_name) {
+        start_time = std::chrono::high_resolution_clock::now();
+    }
+
+    ~Timer() {
+        Stop();
+    }
+
+    void Stop() {
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        std::cout << name << " - " << duration.count()/1000 << " s" << std::endl;
+    }
+};
+
 int main(){
     int N = 1;  // Batch size
     int C = 3;  // Channels
-    int H = 64;  // Height
-    int W = 64;  // Width
+    int H = 256;  // Height
+    int W = 256;  // Width
 
     Tensor4D input(N, C, H, W);
 
     // Initialize one of the matrices with random values
     Conv2D nn = Conv2D();
     input(0, 0) = Eigen::MatrixXf::Random(H, W);
-   
+    auto start_time0 = std::chrono::high_resolution_clock::now();
+    // std::cout<<"Input Tensor Shape is"<<std::endl;
+    input.printShape();
+    std::cout<<"inc_double_conv_0"<<std::endl;
+    Tensor4D s0 = nn.conv2d(input,64);
+    auto end_time0 = std::chrono::high_resolution_clock::now();
+    auto duration0 = std::chrono::duration_cast<std::chrono::milliseconds>(end_time0 - start_time0);
+    std::cout << "Time taken for conv of input with 64x3x3: " << duration0.count() << " ms" << std::endl;
+    s0.printShape();
+     auto start_time = std::chrono::high_resolution_clock::now();
+
     std::cout<<"inc_double_conv_0"<<std::endl;
     Tensor4D s1 = nn.conv2d(input,"inc_double_conv_0");
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    std::cout << "Time taken for conv of input with 64x3x3: " << duration.count() << " ms" << std::endl;
     s1.batch_normalize();
     s1.relu();
     s1.printShape();
+    auto start_time1 = std::chrono::high_resolution_clock::now();
+
     std::cout<<"inc_double_conv_3"<<std::endl;
     Tensor4D s2 = nn.conv2d(s1,"inc_double_conv_3");
     s2.batch_normalize();
     s2.relu();
     s2.printShape();
-    std::cout<<"MaxPooling"<<std::endl;
-    Tensor4D s3 = nn.maxpool2d(s2);
-    s3.printShape();
-    std::cout<<"down1_maxpool_conv_1_double_conv_0"<<std::endl;
-    Tensor4D s4 = nn.conv2d(s3,"down1_maxpool_conv_1_double_conv_0");
-    s4.batch_normalize();
-    s4.relu();
-    s4.printShape();
-    std::cout<<"down1_maxpool_conv_1_double_conv_3"<<std::endl;
-    Tensor4D s5 = nn.conv2d(s4,"down1_maxpool_conv_1_double_conv_3");
-    s5.batch_normalize();
-    s5.relu();
-    s5.printShape();
+    auto end_time1 = std::chrono::high_resolution_clock::now();
+    auto duration1= std::chrono::duration_cast<std::chrono::milliseconds>(end_time1 - start_time1);
 
-    std::cout<<"MaxPooling"<<std::endl;
-    Tensor4D s6 = nn.maxpool2d(s5);
-    s6.printShape();
-    std::cout<<"down2_maxpool_conv_1_double_conv_0"<<std::endl;
-    Tensor4D s7 = nn.conv2d(s6,"down2_maxpool_conv_1_double_conv_0");
-    s7.batch_normalize();
-    s7.relu();
-    s7.printShape();
-    std::cout<<"down2_maxpool_conv_1_double_conv_3"<<std::endl;
-    Tensor4D s8 = nn.conv2d(s7,"down2_maxpool_conv_1_double_conv_3");
-    s8.batch_normalize();
-    s8.relu();
-    s8.printShape();
+    std::cout << "Time taken for conv of: " << duration1.count() << " ms" << std::endl;
+    // std::cout<<"MaxPooling"<<std::endl;
+    // Tensor4D s3 = nn.maxpool2d(s2);
+    // s3.printShape();
+    // std::cout<<"down1_maxpool_conv_1_double_conv_0"<<std::endl;
+    // Tensor4D s4 = nn.conv2d(s3,"down1_maxpool_conv_1_double_conv_0");
+    // s4.batch_normalize();
+    // s4.relu();
+    // s4.printShape();
+    // std::cout<<"down1_maxpool_conv_1_double_conv_3"<<std::endl;
+    // Tensor4D s5 = nn.conv2d(s4,"down1_maxpool_conv_1_double_conv_3");
+    // s5.batch_normalize();
+    // s5.relu();
+    // s5.printShape();
 
-    std::cout<<"MaxPooling"<<std::endl;
-    Tensor4D s9 = nn.maxpool2d(s8);
-    s9.printShape();
-    std::cout<<"down3_maxpool_conv_1_double_conv_0"<<std::endl;
-    Tensor4D s10 = nn.conv2d(s9,"down3_maxpool_conv_1_double_conv_0");
-    s10.batch_normalize();
-    s10.relu();
-    s10.printShape();
-    std::cout<<"down3_maxpool_conv_1_double_conv_3"<<std::endl;
-    Tensor4D s11 = nn.conv2d(s10,"down3_maxpool_conv_1_double_conv_3");
-    s11.batch_normalize();
-    s11.relu();
-    s11.printShape();
+    // std::cout<<"MaxPooling"<<std::endl;
+    // Tensor4D s6 = nn.maxpool2d(s5);
+    // s6.printShape();
+    // std::cout<<"down2_maxpool_conv_1_double_conv_0"<<std::endl;
+    // Tensor4D s7 = nn.conv2d(s6,"down2_maxpool_conv_1_double_conv_0");
+    // s7.batch_normalize();
+    // s7.relu();
+    // s7.printShape();
+    // std::cout<<"down2_maxpool_conv_1_double_conv_3"<<std::endl;
+    // Tensor4D s8 = nn.conv2d(s7,"down2_maxpool_conv_1_double_conv_3");
+    // s8.batch_normalize();
+    // s8.relu();
+    // s8.printShape();
 
-    std::cout<<"MaxPooling"<<std::endl;
-    Tensor4D s12 = nn.maxpool2d(s11);
-    s12.printShape();
-    std::cout<<"down4_maxpool_conv_1_double_conv_0"<<std::endl;
-    Tensor4D s13 = nn.conv2d(s12,"down4_maxpool_conv_1_double_conv_0");
-    s13.batch_normalize();
-    s13.relu();
-    s13.printShape();
-    std::cout<<"down4_maxpool_conv_1_double_conv_3"<<std::endl;
-    Tensor4D s14 = nn.conv2d(s13,"down4_maxpool_conv_1_double_conv_3");
-    s14.batch_normalize();
-    s14.relu();
-    s14.printShape();
+    // std::cout<<"MaxPooling"<<std::endl;
+    // Tensor4D s9 = nn.maxpool2d(s8);
+    // s9.printShape();
+    // std::cout<<"down3_maxpool_conv_1_double_conv_0"<<std::endl;
+    // Tensor4D s10 = nn.conv2d(s9,"down3_maxpool_conv_1_double_conv_0");
+    // s10.batch_normalize();
+    // s10.relu();
+    // s10.printShape();
+    // std::cout<<"down3_maxpool_conv_1_double_conv_3"<<std::endl;
+    // Tensor4D s11 = nn.conv2d(s10,"down3_maxpool_conv_1_double_conv_3");
+    // s11.batch_normalize();
+    // s11.relu();
+    // s11.printShape();
+
+    // std::cout<<"MaxPooling"<<std::endl;
+    // Tensor4D s12 = nn.maxpool2d(s11);
+    // s12.printShape();
+    // std::cout<<"down4_maxpool_conv_1_double_conv_0"<<std::endl;
+    // Tensor4D s13 = nn.conv2d(s12,"down4_maxpool_conv_1_double_conv_0");
+    // s13.batch_normalize();
+    // s13.relu();
+    // s13.printShape();
+    // std::cout<<"down4_maxpool_conv_1_double_conv_3"<<std::endl;
+    // Tensor4D s14 = nn.conv2d(s13,"down4_maxpool_conv_1_double_conv_3");
+    // s14.batch_normalize();
+    // s14.relu();
+    // s14.printShape();
 
     // std::cout<<"up1_conv_double_conv_0"<<std::endl;
     // Tensor4D s16 = nn.conv2d(xx,"up1_conv_double_conv_0");

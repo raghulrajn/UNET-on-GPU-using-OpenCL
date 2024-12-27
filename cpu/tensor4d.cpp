@@ -1,6 +1,7 @@
 #include<iostream>
 #include<vector>
 #include<Eigen/Dense>
+#include <opencv2/opencv.hpp>
 
 class Tensor4D {
 private:
@@ -207,6 +208,96 @@ public:
 
     void printShape(){
         std::cout<<"("<<n<<","<<c<<","<<h<<","<<w<<")"<<std::endl;
+    }
+
+    // Method to read image and convert to Tensor4D
+    static Tensor4D fromImage(const std::string& imagePath, bool normalize = true) {
+        // Read image using OpenCV
+        cv::Mat image = cv::imread(imagePath);
+        if (image.empty()) {
+            throw std::runtime_error("Failed to load image: " + imagePath);
+        }
+
+        // Convert BGR to RGB
+        cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+
+        // Create Tensor4D with dimensions (1, 3, H, W)
+        Tensor4D tensor(1, 3, image.rows, image.cols);
+
+        // Copy data from cv::Mat to Tensor4D
+        for (int h = 0; h < image.rows; ++h) {
+            for (int w = 0; w < image.cols; ++w) {
+                cv::Vec3b pixel = image.at<cv::Vec3b>(h, w);
+                for (int c = 0; c < 3; ++c) {
+                    // Normalize to [0,1] if requested
+                    float value = normalize ? pixel[c] / 255.0f : static_cast<float>(pixel[c]);
+                    tensor.tensor4d[0][c](h, w) = value;
+                }
+            }
+        }
+
+        return tensor;
+    }
+
+    // Method to save Tensor4D as image
+    void saveImage(const std::string& filename, bool denormalize = true) const {
+        if (n != 1) {
+            throw std::runtime_error("Can only save single-batch tensors as images");
+        }
+        if (c != 3 && c != 1) {
+            throw std::runtime_error("Can only save RGB (3 channels) or grayscale (1 channel) images");
+        }
+
+        // Create OpenCV Mat
+        cv::Mat image(h, w, c == 3 ? CV_8UC3 : CV_8UC1);
+
+        // Copy data from Tensor4D to cv::Mat
+        for (int h_idx = 0; h_idx < h; ++h_idx) {
+            for (int w_idx = 0; w_idx < w; ++w_idx) {
+                if (c == 3) {
+                    cv::Vec3b pixel;
+                    for (int c_idx = 0; c_idx < 3; ++c_idx) {
+                        float value = tensor4d[0][c_idx](h_idx, w_idx);
+                        // Denormalize if needed and convert to uint8
+                        value = denormalize ? value * 255.0f : value;
+                        pixel[c_idx] = static_cast<uchar>(std::min(std::max(value, 0.0f), 255.0f));
+                    }
+                    image.at<cv::Vec3b>(h_idx, w_idx) = pixel;
+                } else {
+                    float value = tensor4d[0][0](h_idx, w_idx);
+                    // Denormalize if needed and convert to uint8
+                    value = denormalize ? value * 255.0f : value;
+                    image.at<uchar>(h_idx, w_idx) = static_cast<uchar>(std::min(std::max(value, 0.0f), 255.0f));
+                }
+            }
+        }
+
+        // Convert RGB to BGR for OpenCV
+        if (c == 3) {
+            cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+        }
+
+        // Save image
+        if (!cv::imwrite(filename, image)) {
+            throw std::runtime_error("Failed to save image: " + filename);
+        }
+    }
+
+    //Method to set random values to Tensor4D 
+    void setRandom(unsigned int seed = 42) {
+        std::mt19937 gen(seed);
+        std::uniform_real_distribution<float> dis(0.0f, 255.0f);
+
+        #pragma omp parallel for collapse(2)
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < c; ++j) {
+                for (int h_idx = 0; h_idx < h; ++h_idx) {
+                    for (int w_idx = 0; w_idx < w; ++w_idx) {
+                        tensor4d[i][j](h_idx, w_idx) = dis(gen);
+                    }
+                }
+            }
+        }
     }
 };
 
