@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <chrono>
 
+// g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o nn nn.cpp cnpy/build/libcnpy.a -lz `pkg-config --cflags --libs opencv4`
 class Conv2D{
 
     private:
@@ -224,7 +225,6 @@ class Conv2D{
     // Max pooling function with stride and padding options
     static Tensor4D maxpool(const Tensor4D& input, int pooling = 2, int stride=2, int padding=0) {
         // Add padding
-        std::cout<<"here";
         int paddedH = input.dimension(2) + 2 * padding;
         int paddedW = input.dimension(3) + 2 * padding;
         // Tensor4D paddedTensor(input.dimension(1), input.dimension(1), paddedH, paddedW);
@@ -241,37 +241,37 @@ class Conv2D{
         // Create new tensor for the result
         Tensor4D result(shrunkenTensor.n, shrunkenTensor.c, newH, newW);
 
-    const int batch_size = input.dimension(0);
-    const int channels = input.dimension(1);
-    // const int height = input.dimension(2);
-    // const int width = input.dimension(3);
+        const int batch_size = input.dimension(0);
+        const int channels = input.dimension(1);
+        // const int height = input.dimension(2);
+        // const int width = input.dimension(3);
 
-    // Perform max pooling
-    for (int b = 0; b < batch_size; ++b) {
-        for (int c = 0; c < channels; ++c) {
-            for (int h = 0; h < newH; ++h) {
-                for (int w = 0; w < newW; ++w) {
-                    // Calculate input starting position based on stride
-                    int h_start = h * stride;
-                    int w_start = w * stride;
+        // Perform max pooling
+        for (int b = 0; b < batch_size; ++b) {
+            for (int c = 0; c < channels; ++c) {
+                for (int h = 0; h < newH; ++h) {
+                    for (int w = 0; w < newW; ++w) {
+                        // Calculate input starting position based on stride
+                        int h_start = h * stride;
+                        int w_start = w * stride;
 
-                    // Find maximum value in the 2x2 window
-                    float max_val = input.tensor(b, c, h_start, w_start);
-                    for (int i = 0; i < 2; ++i) {
-                        for (int j = 0; j < 2; ++j) {
-                            max_val = std::max(max_val, 
-                                input.tensor(b, c, h_start + i, w_start + j));
+                        // Find maximum value in the 2x2 window
+                        float max_val = input.tensor(b, c, h_start, w_start);
+                        for (int i = 0; i < 2; ++i) {
+                            for (int j = 0; j < 2; ++j) {
+                                max_val = std::max(max_val, 
+                                    input.tensor(b, c, h_start + i, w_start + j));
+                            }
                         }
+                        
+                        // Assign the maximum value to the output tensor
+                        result.tensor(b, c, h, w) = max_val;
                     }
-                    
-                    // Assign the maximum value to the output tensor
-                    result.tensor(b, c, h, w) = max_val;
                 }
             }
         }
+        return result;
     }
-    return result;
-}
 
 };
 
