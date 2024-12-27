@@ -10,6 +10,7 @@ Implemented 4D initialisation of tensor
 
 ```console
 sudo apt-get install libeigen3-dev
+sudo apt-get install -y libopencv-dev
 ```
 
 ### To read [pre-trained kernels](https://github.com/milesial/Pytorch-UNet)
@@ -30,7 +31,7 @@ chmod +r cnpy/build/libcnpy.a
 
 ### To compile
 ```
-g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o conv conv2D.cpp kernel_loader.cpp cnpy/build/libcnpy.a -lz
+g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o unet conv2D.cpp cnpy/build/libcnpy.a -lz `pkg-config --cflags --libs opencv4`
 ```
 
 ### Link to documentation
