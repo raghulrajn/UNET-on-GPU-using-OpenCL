@@ -2,6 +2,7 @@
 #include<vector>
 #include<Eigen/Dense>
 #include <opencv2/opencv.hpp>
+#include <random>
 
 class Tensor4D {
 private:
@@ -177,7 +178,7 @@ public:
     }
 
     //Applies Batch normalisation to the tensor4D object inplace
-    void batch_normalize(float epsilon = 1e-5) {
+    void batchNorm(float epsilon = 1e-5) {
         // Initialize gamma and beta if they are not provided
         Eigen::VectorXf gamma, beta;
         if (gamma.size() == 0) gamma = Eigen::VectorXf::Ones(c);
@@ -285,8 +286,9 @@ public:
 
     //Method to set random values to Tensor4D 
     void setRandom(unsigned int seed = 42) {
+        std::random_device rd;
         std::mt19937 gen(seed);
-        std::uniform_real_distribution<float> dis(0.0f, 255.0f);
+        std::normal_distribution<float> dis(0.0f, 255.0f);
 
         #pragma omp parallel for collapse(2)
         for (int i = 0; i < n; ++i) {

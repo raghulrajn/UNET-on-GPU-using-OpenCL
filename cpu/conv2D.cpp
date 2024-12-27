@@ -11,6 +11,7 @@
 #include "cnpy/cnpy.h"
 #include <chrono>
 // g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o conv conv2D.cpp kernel_loader.cpp cnpy/build/libcnpy.a -lz
+// g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o unet conv2D.cpp cnpy/build/libcnpy.a -lz `pkg-config --cflags --libs opencv4`
 class Conv2D{
 
     private:
@@ -469,10 +470,9 @@ public:
     }
 
     ~Timer() {
-        Stop();
     }
 
-    void Stop() {
+    void stop() {
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
         std::cout << name << " - " << duration.count()/1000 << " s" << std::endl;
@@ -480,110 +480,103 @@ public:
 };
 
 int main(){
-    int N = 1;  // Batch size
-    int C = 3;  // Channels
-    int H = 256;  // Height
-    int W = 256;  // Width
-
-    Tensor4D input(N, C, H, W);
-
-    // Initialize one of the matrices with random values
-    Conv2D nn = Conv2D();
-    input(0, 0) = Eigen::MatrixXf::Random(H, W);
-    auto start_time0 = std::chrono::high_resolution_clock::now();
-    // std::cout<<"Input Tensor Shape is"<<std::endl;
+    Tensor4D input = Tensor4D::fromImage("./utils/image.jpg");
     input.printShape();
-    std::cout<<"inc_double_conv_0"<<std::endl;
-    Tensor4D s0 = nn.conv2d(input,64);
-    auto end_time0 = std::chrono::high_resolution_clock::now();
-    auto duration0 = std::chrono::duration_cast<std::chrono::milliseconds>(end_time0 - start_time0);
-    std::cout << "Time taken for conv of input with 64x3x3: " << duration0.count() << " ms" << std::endl;
-    s0.printShape();
-     auto start_time = std::chrono::high_resolution_clock::now();
-
-    std::cout<<"inc_double_conv_0"<<std::endl;
-    Tensor4D s1 = nn.conv2d(input,"inc_double_conv_0");
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
-    std::cout << "Time taken for conv of input with 64x3x3: " << duration.count() << " ms" << std::endl;
-    s1.batch_normalize();
+    Conv2D nn = Conv2D();
+    
+    Timer t1("inc_double_conv_0");
+    Tensor4D s1 = nn.conv2d(input, "inc_double_conv_0");
     s1.relu();
+    s1.batchNorm();
     s1.printShape();
-    auto start_time1 = std::chrono::high_resolution_clock::now();
+    t1.stop();
+    
 
-    std::cout<<"inc_double_conv_3"<<std::endl;
-    Tensor4D s2 = nn.conv2d(s1,"inc_double_conv_3");
-    s2.batch_normalize();
-    s2.relu();
-    s2.printShape();
-    auto end_time1 = std::chrono::high_resolution_clock::now();
-    auto duration1= std::chrono::duration_cast<std::chrono::milliseconds>(end_time1 - start_time1);
+    Timer t2("upsample");
+    Tensor4D up = nn.upsampling(s1);
+    up.printShape();
+    t2.stop();
 
-    std::cout << "Time taken for conv of: " << duration1.count() << " ms" << std::endl;
-    // std::cout<<"MaxPooling"<<std::endl;
+
+    // Timer t2("inc_double_conv_3");
+    // Tensor4D s2 = nn.conv2d(s1,"inc_double_conv_3");
+    // s2.batchNorm();
+    // s2.relu();
+    // s2.printShape();
+    // t2.Stop();
+    
+    // Timer t3("Maxpool");
     // Tensor4D s3 = nn.maxpool2d(s2);
     // s3.printShape();
-    // std::cout<<"down1_maxpool_conv_1_double_conv_0"<<std::endl;
+    // t3.Stop();
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s4 = nn.conv2d(s3,"down1_maxpool_conv_1_double_conv_0");
     // s4.batch_normalize();
     // s4.relu();
     // s4.printShape();
-    // std::cout<<"down1_maxpool_conv_1_double_conv_3"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s5 = nn.conv2d(s4,"down1_maxpool_conv_1_double_conv_3");
     // s5.batch_normalize();
     // s5.relu();
     // s5.printShape();
 
-    // std::cout<<"MaxPooling"<<std::endl;
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s6 = nn.maxpool2d(s5);
     // s6.printShape();
-    // std::cout<<"down2_maxpool_conv_1_double_conv_0"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s7 = nn.conv2d(s6,"down2_maxpool_conv_1_double_conv_0");
     // s7.batch_normalize();
     // s7.relu();
     // s7.printShape();
-    // std::cout<<"down2_maxpool_conv_1_double_conv_3"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s8 = nn.conv2d(s7,"down2_maxpool_conv_1_double_conv_3");
     // s8.batch_normalize();
     // s8.relu();
     // s8.printShape();
 
-    // std::cout<<"MaxPooling"<<std::endl;
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s9 = nn.maxpool2d(s8);
     // s9.printShape();
-    // std::cout<<"down3_maxpool_conv_1_double_conv_0"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s10 = nn.conv2d(s9,"down3_maxpool_conv_1_double_conv_0");
     // s10.batch_normalize();
     // s10.relu();
     // s10.printShape();
-    // std::cout<<"down3_maxpool_conv_1_double_conv_3"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s11 = nn.conv2d(s10,"down3_maxpool_conv_1_double_conv_3");
     // s11.batch_normalize();
     // s11.relu();
     // s11.printShape();
 
-    // std::cout<<"MaxPooling"<<std::endl;
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s12 = nn.maxpool2d(s11);
     // s12.printShape();
-    // std::cout<<"down4_maxpool_conv_1_double_conv_0"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s13 = nn.conv2d(s12,"down4_maxpool_conv_1_double_conv_0");
     // s13.batch_normalize();
     // s13.relu();
     // s13.printShape();
-    // std::cout<<"down4_maxpool_conv_1_double_conv_3"<<std::endl;
+    
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s14 = nn.conv2d(s13,"down4_maxpool_conv_1_double_conv_3");
     // s14.batch_normalize();
     // s14.relu();
     // s14.printShape();
 
-    // std::cout<<"up1_conv_double_conv_0"<<std::endl;
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s16 = nn.conv2d(xx,"up1_conv_double_conv_0");
     // s16.batch_normalize();
     // s16.relu();
     // s16.printShape();
 
-    // std::cout<<"up1_conv_double_conv_3"<<std::endl;
+    // Timer timer("inc_double_conv_0");
     // Tensor4D s17 = nn.conv2d(s16,"up1_conv_double_conv_3");
     // s17.batch_normalize();
     // s17.relu();
