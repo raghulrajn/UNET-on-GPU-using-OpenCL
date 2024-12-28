@@ -1,28 +1,16 @@
-# Compiler and flags
-CXX := g++
-CXXFLAGS := -std=c++17 -Wall -I/usr/include/eigen3
+CXX = g++
+CXXFLAGS = -std=c++17 -I/cnpy -I/usr/include/eigen3
+LDFLAGS = -L/cnpy/build -lz
+LIBS = cnpy/build/libcnpy.a `pkg-config --cflags --libs opencv4`
 
-# Target executable name
-TARGET := tensor4d
+TARGET = unet
+SRC = conv2D.cpp
 
-# Source files
-SRCS := tensor4d.cpp
-
-# Object files
-OBJS := $(SRCS:.cpp=.o)
-
-# Compilation rule
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
+$(TARGET): $(SRC)
+	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LIBS) $(LDFLAGS)
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Clean rule to remove compiled files
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET)
 
-# Phony targets
-.PHONY: all clean
