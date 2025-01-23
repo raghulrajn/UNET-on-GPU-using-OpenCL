@@ -31,6 +31,8 @@ class GPUInit {
 		cl::Kernel convKernel;
 		cl::Kernel reluKernel;
 		cl::Kernel maxpoolKernel;
+
+		cl::Buffer pipeBuffer;
 		std::vector<cl::Device> devices;
 
 	public:
@@ -38,7 +40,6 @@ class GPUInit {
 		context = cl::Context(CL_DEVICE_TYPE_GPU);
 		device = context.getInfo<CL_CONTEXT_DEVICES>()[0];
 		devices.push_back(device);
-
 		queue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE);
 
 		// Load the source code
@@ -59,11 +60,11 @@ class GPUInit {
 	}
 
 	void getGpuDetails(){
-		std::cout << "Device: " << device.getInfo<CL_DEVICE_NAME>() << std::endl;
-		std::cout << "Max Work Group Size: " << device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
-		std::cout << "Max Compute Units: " << device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-		std::cout << "Global Memory Size: " << device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()/1000000 << " MB" << std::endl;
-		std::cout << "Local Memory Size: " << device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() << " bytes" << std::endl;
+		std::cout << "Device: "                   << device.getInfo<CL_DEVICE_NAME>() << std::endl;
+		std::cout << "Max Work Group Size: "      << device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+		std::cout << "Max Compute Units: "        << device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+		std::cout << "Global Memory Size: "       << device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()/1000000 << " MB" << std::endl;
+		std::cout << "Local Memory Size: "        << device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() << " bytes" << std::endl;
 		std::cout << "Max Work Item Dimensions: " << device.getInfo<CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS>() << std::endl;
 		auto maxWorkItemSizes = device.getInfo<CL_DEVICE_MAX_WORK_ITEM_SIZES>();
 		std::cout << "Max Work Item Sizes: ";
@@ -74,7 +75,7 @@ class GPUInit {
 	}
 
 	std::vector<float> convolution(std::vector<float> &input, std::vector<float> &kernel, int N, int C, int H, int W, int OutC, int Kh, int Kw, int stride, int padding){
-		 int outH = (H + 2 * padding - Kh) / stride + 1;
+		int outH = (H + 2 * padding - Kh) / stride + 1;
 		int outW = (W + 2 * padding - Kw) / stride + 1;
 
 		std::vector<float> output(N*OutC*outH* outW);
@@ -93,25 +94,26 @@ class GPUInit {
 		convKernel.setArg(9, Kw); // Kernel width
 		convKernel.setArg(10, stride); // Stride
 		convKernel.setArg(11, padding); // Padding
-    // Set up work sizes (output size)
+        // Set up work sizes (output size)
 		cl::Event convevent;
 		cl::NDRange global(N, outH, outW); // (width * height * output channels, batch size)
 		queue.enqueueNDRangeKernel(convKernel, cl::NullRange, global, cl::NDRange(),NULL,&convevent);
-    // Read the output back to the host
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float)*output.size(), output.data(),NULL,&convevent);
+        // Read the output back to the host
+		pipeBuffer = outputBuffer;
+		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float)*output.size(), output.data(),NULL,&convevent);
 		queue.finish();
 
-		 Core::TimeSpan timeGpu = OpenCL::getElapsedTime(convevent);
+		Core::TimeSpan timeGpu = OpenCL::getElapsedTime(convevent);
 		std::cout<<"Conv GPU time is "<<timeGpu<<std::endl;
 		return output;
 	}
 
 	std::vector<float> relu(std::vector<float> &input, int N, int C, int H, int W){
 		std::vector<float> output(N*C*H*W);
-		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		//cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
 		cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * input.size());
-
-		reluKernel.setArg(0, inputBuffer);  // input tensor
+		reluKernel.setArg(0, pipeBuffer);  // input tensor
+		//reluKernel.setArg(0, inputBuffer);  // input tensor
 		reluKernel.setArg(1, outputBuffer); // output tensor
 		reluKernel.setArg(2, N*C*H*W); // size of the input tensor
 
@@ -121,8 +123,10 @@ class GPUInit {
 		// Enqueue the kernel for execution
 		cl::Event reluevent;
 		queue.enqueueNDRangeKernel(reluKernel, cl::NullRange, global, local,NULL,&reluevent);
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * input.size(), output.data(),NULL,&reluevent);
-		 Core::TimeSpan timeGpu = OpenCL::getElapsedTime(reluevent);
+		queue.finish();
+		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * input.size(), output.data(),NULL,&reluevent);
+		pipeBuffer = outputBuffer;
+		Core::TimeSpan timeGpu = OpenCL::getElapsedTime(reluevent);
 		std::cout<<"Relu GPU time is "<<timeGpu<<std::endl;
 		return output;
 	}
@@ -132,11 +136,10 @@ class GPUInit {
 		int outH = (H - pool_size) / stride + 1;
 		int outW = (W - pool_size) / stride + 1;
 		std::vector<float> output(N*C*outH*outW);
-		std::cout<<N<<" "<<C<<" "<<outH<<" "<<outW<<std::endl;
-		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		//cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
 		cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * output.size());
 
-		maxpoolKernel.setArg(0, inputBuffer);
+		maxpoolKernel.setArg(0, pipeBuffer);
 		maxpoolKernel.setArg(1, outputBuffer);
 		maxpoolKernel.setArg(2, N); // Batch size
 		maxpoolKernel.setArg(3, C); // Number of channels
@@ -150,17 +153,16 @@ class GPUInit {
 		cl::NDRange local(1, 1); // Workgroup size (could be optimized further)
 
 		// Enqueue kernel for execution
-		cl::Event maxpoolevent;
-		queue.enqueueNDRangeKernel(maxpoolKernel, cl::NullRange, global, local, NULL,&maxpoolevent);
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * output.size(), output.data(),NULL,&maxpoolevent);
-		 Core::TimeSpan timeGpu = OpenCL::getElapsedTime(maxpoolevent);
+		cl::Event maxpoolevent[3];
+		queue.enqueueNDRangeKernel(maxpoolKernel, cl::NullRange, global, local, NULL,&maxpoolevent[1]);
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * output.size(), output.data(),NULL,&maxpoolevent[2]);
+		queue.finish();
+		 Core::TimeSpan timeGpu = OpenCL::getElapsedTime(maxpoolevent[1]);
 		std::cout<<"Maxpool GPU time is "<<timeGpu<<std::endl;
+		Core::TimeSpan timeGpu2 = OpenCL::getElapsedTime(maxpoolevent[2]);
+		std::cout<<"copying maxpool GPU time is "<<timeGpu2<<std::endl;
 		return output;
 	}
-
-
-
-
 
 };
 
@@ -250,7 +252,7 @@ int main() {
 
     // Define the distribution range (0, 256)
     std::uniform_real_distribution<float> dis(0.0f, 256.0f);
-	 std::uniform_real_distribution<float> ker(0.0f, 10.0f);
+	std::uniform_real_distribution<float> ker(0.0f, 10.0f);
 
     // Define input dimensions
     int N = 1;     // Batch size
