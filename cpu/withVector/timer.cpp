@@ -1,4 +1,4 @@
-#include "Timer.h"
+#include "timer.h"
 
 Timer::Timer(const std::string& function_name) : name(function_name) {
     start_time = std::chrono::high_resolution_clock::now();
