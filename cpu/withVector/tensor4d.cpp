@@ -4,6 +4,8 @@
 #include <random>
 #include <chrono>
 #include "timer.h"
+#include "stb/stb_image.h"
+#include "stb/stb_image_write.h"
 
 class Tensor4D {
 private:
@@ -191,8 +193,120 @@ public:
             }
                 std::cout << "\n";
             }
-            
+    void addPadding(int padHeight, int padWidth) {
+        // New dimensions after padding
+        int newH = H + 2 * padHeight;
+        int newW = W + 2 * padWidth;
+
+        // Resize data to the new dimensions
+        std::vector<std::vector<std::vector<std::vector<float>>>> newData(
+            N, std::vector<std::vector<std::vector<float>>>(
+                    C, std::vector<std::vector<float>>(
+                            newH, std::vector<float>(newW, 0.0f))));
+
+        // Copy original data into the new padded tensor
+        for (int n = 0; n < N; ++n) {
+            for (int c = 0; c < C; ++c) {
+                for (int h = 0; h < H; ++h) {
+                    for (int w = 0; w < W; ++w) {
+                        newData[n][c][h + padHeight][w + padWidth] = data[n][c][h][w];
+                    }
+                }
+            }
+        }
+
+        // Update data with padded tensor
+        data = std::move(newData);
+        H = newH;
+        W = newW;
+    }  
 };
+
+
+class Conv2d {
+
+public:
+    // Apply ReLU activation function
+    void applyReLU(Tensor4D& tensor) {
+        for (int n = 0; n < tensor.getN(); ++n) {
+            for (int c = 0; c < tensor.getC(); ++c) {
+                for (int h = 0; h < tensor.getH(); ++h) {
+                    for (int w = 0; w < tensor.getW(); ++w) {
+                        if (tensor.at(n, c, h, w) < 0) {
+                            tensor.at(n, c, h, w) = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply Max Pooling
+    void applyMaxPool(Tensor4D& tensor, int poolHeight, int poolWidth, int stride) {
+        int outputHeight = (tensor.getH() - poolHeight) / stride + 1;
+        int outputWidth = (tensor.getW() - poolWidth) / stride + 1;
+
+        Tensor4D pooledTensor(tensor.getN(), tensor.getC(), outputHeight, outputWidth);
+
+        for (int n = 0; n < tensor.getN(); ++n) {
+            for (int c = 0; c < tensor.getC(); ++c) {
+                for (int h = 0; h < outputHeight; ++h) {
+                    for (int w = 0; w < outputWidth; ++w) {
+                        float maxVal = -std::numeric_limits<float>::infinity();
+                        for (int ph = 0; ph < poolHeight; ++ph) {
+                            for (int pw = 0; pw < poolWidth; ++pw) {
+                                int inputH = h * stride + ph;
+                                int inputW = w * stride + pw;
+                                maxVal = std::max(maxVal, tensor.at(n, c, inputH, inputW));
+                            }
+                        }
+                        pooledTensor.at(n, c, h, w) = maxVal;
+                    }
+                }
+            }
+        }
+
+        // Update the tensor with the pooled tensor
+        tensor = std::move(pooledTensor);
+    }
+
+    // Apply Batch Normalization
+    void applyBatchNorm(Tensor4D& tensor, float epsilon = 1e-5) {
+        for (int c = 0; c < tensor.getC(); ++c) {
+            // Calculate mean and variance for the current channel
+            float mean = 0.0f;
+            float variance = 0.0f;
+
+            // Calculate mean
+            for (int n = 0; n < tensor.getN(); ++n) {
+                for (int h = 0; h < tensor.getH(); ++h) {
+                    for (int w = 0; w < tensor.getW(); ++w) {
+                        mean += tensor.at(n, c, h, w);
+                    }
+                }
+            }
+            mean /= (tensor.getN() * tensor.getH() * tensor.getW());
+
+            // Calculate variance
+            for (int n = 0; n < tensor.getN(); ++n) {
+                for (int h = 0; h < tensor.getH(); ++h) {
+                    for (int w = 0; w < tensor.getW(); ++w) {
+                        variance += std::pow(tensor.at(n, c, h, w) - mean, 2);
+                    }
+                }
+            }
+            variance /= (tensor.getN() * tensor.getH() * tensor.getW());
+
+            // Apply batch normalization (standardize)
+            for (int n = 0; n < tensor.getN(); ++n) {
+                for (int h = 0; h < tensor.getH(); ++h) {
+                    for (int w = 0; w < tensor.getW(); ++w) {
+                        tensor.at(n, c, h, w) = (tensor.at(n, c, h, w) - mean) / std::sqrt(variance + epsilon);
+                    }
+                }
+            }
+        }
+    }
 
 Tensor4D convolution_2d(const Tensor4D& input,
                     const Tensor4D& kernel,
@@ -235,18 +349,16 @@ Tensor4D convolution_2d(const Tensor4D& input,
     }
     return output;
 }
-
+};
 
 int main() {
 
-    //Tensor4D result = tensor1.scalarAdd(3.0f);
-    //result = tensor1.tensorAdd(tensor2);
-    
-    int N = 1, C = 3, H = 10, W = 10;
+    int N = 1, C = 3, H = 576, W = 576;
     int k_height = 3, k_width = 3;
 
     // Create input, kernel, and output tensors
     Tensor4D input(N, C, H, W);
+    Tensor4D input2(N, C, H, W);
     Tensor4D kernel(1, 128, k_height, k_width);
    
     // Set random values for input and kernel
@@ -254,12 +366,25 @@ int main() {
     //kernel.setRandomValues(0.0f, 1.0f);
 		input.setValue();
 		kernel.setValue();
-    // Perform convolution
+		
+		input.addPadding(1,1);
+	
+    Conv2d nn = Conv2d();
     Timer t1("conv");
-    Tensor4D output = convolution_2d(input, kernel, 1, 0);
+    Tensor4D output1 = nn.convolution_2d(input, kernel, 1, 0);
 		t1.stop();
-    output.getMatrix(0,0);
+   
+    Timer t2("relu");
+    nn.applyReLU(output1);
+    t2.stop();
+
+    Timer t3("maxpool");
+    nn.applyMaxPool(output1, 2, 2, 2);
+    t3.stop();
+   
+    Timer t4("maxpool");
+    nn.applyBatchNorm(output1);
+    t4.stop();
 
     return 0;
 }
-
