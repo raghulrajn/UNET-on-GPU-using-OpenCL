@@ -1,6 +1,8 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -O2
+CXXFLAGS = -std=c++17 -I/cnpy `pkg-config --cflags --libs opencv4`
+LDFLAGS = -L/cnpy/build -lz
+LIBS = cnpy/build/libcnpy.a `pkg-config --cflags --libs opencv4`
 
 # Target executable
 TARGET = main
@@ -14,7 +16,7 @@ all: $(TARGET)
 
 # Linking the target
 $(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) $(LIBS) $(LDFLAGS)
 	rm -f $(OBJS)
 
 # Clean up build files
