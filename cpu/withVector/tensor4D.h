@@ -134,6 +134,24 @@ public:
      *       match, an exception may be thrown.
      */
     static Tensor4D fromNPY(const std::string &filename);
+
+     /**
+     * @brief Loads a `.jpg` file and converts its data into a Tensor4D object.
+     * 
+     * This function reads the contents of a `.jpg` file, which contains a multi-dimensional array, and 
+     * converts it into a `Tensor4D` object. The `.jpg` file should represent a 4D tensor with the correct
+     * dimensions (N x C x H x W), where:
+     *  - `N` is the batch size,
+     *  - `C` is the number of channels,
+     *  - `H` is the height,
+     *  - `W` is the width.
+     * 
+     * The `fromJPG` function will parse the file, extract the data and converted to `Tensor4D`
+     * 
+     * @param filename The path to the `.jpg`
+     * 
+     * @return `Tensor4D` loaded from .jpg 
+     */
     static Tensor4D fromJPG(const std::string &filename);
 
 
