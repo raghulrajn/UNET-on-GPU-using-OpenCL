@@ -35,6 +35,7 @@ public:
     void setValue();
     void addPadding(int padHeight, int padWidth);
     void getMatrix(int N, int C) const; 
+    void saveAsJPG(const std::string &filename);
 
     // Arithmetic operations
     Tensor4D add(const Tensor4D& other) const;
@@ -50,6 +51,9 @@ public:
 
     Tensor4D concatAlongChannels(const Tensor4D& other) const;
     Tensor4D upsample(int newH, int newW) const;
+    Tensor4D extract(int newH, int newW);
+    static Tensor4D fromNPY(const std::string &filename);
+    static Tensor4D fromJPG(const std::string &filename);
 
 
 };

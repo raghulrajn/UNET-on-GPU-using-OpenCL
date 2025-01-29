@@ -3,54 +3,43 @@
 #include "timer.h"
 
 int main(){
-
-    {
-
-    int N = 1, C = 3, H = 576, W = 576;
-    int k_height = 3, k_width = 3;
-
-    // Create input, kernel, and output tensors
-    Tensor4D input(N, C, H, W);
-    Tensor4D input2(N, C, H, W);
-    Tensor4D x(N, 1, 10, 10);
-    Tensor4D kernel(1, 128, k_height, k_width);
-   
-    // Set random values for input and kernel
-    //input.setRandomValues(0.0f, 256.0f);
-    //kernel.setRandomValues(0.0f, 1.0f);
-	input.setValue();
-	kernel.setValue();
-    x.setValue();
-		
-	input.addPadding(1,1);
-	
+    std::string kernelPath = "/kernels/";
+    Tensor4D input_image = Tensor4D::fromJPG("utils/image.jpg");
+    input_image.printDimensions();
+    
     Conv2d nn = Conv2d();
     Timer t1("conv");
-    Tensor4D output1 = nn.convolution_2d(input, kernel, 1, 0);
-	t1.stop();
-   
+    Tensor4D conv1 = nn.convolution_2d(input_image, kernelPath+"inc_double_conv_0",1,0,false);
+    conv1.printDimensions();
+    t1.stop();
+
     Timer t2("relu");
-    nn.applyReLU(output1);
+    nn.applyReLU(conv1);
     t2.stop();
 
     Timer t3("maxpool");
-    nn.applyMaxPool(output1, 2, 2, 2);
+    nn.applyMaxPool(conv1, 2, 2, 2);
     t3.stop();
+    conv1.printDimensions();
    
     Timer t4("batchNorm");
-    nn.applyBatchNorm(output1, 1e-5);
+    nn.applyBatchNorm(conv1, 1e-5);
     t4.stop();
 
     Timer t5("upsample");
-    Tensor4D up = x.upsample(x.getH()*2,x.getW()*2);
+    Tensor4D up = conv1.upsample(conv1.getH()*2,conv1.getW()*2);
     t5.stop();
 
     up.printDimensions();
 
     Timer t6("concat");
-    Tensor4D c = x.concatAlongChannels(x);
+    Tensor4D c = conv1.concatAlongChannels(conv1);
     t6.stop();
-    return 0;
-}
 
+    Timer t7("conv2");
+    Tensor4D conv2 = nn.convolution_2d(conv1, kernelPath+"inc_double_conv_3",1,0,false);
+    conv2.printDimensions();
+    t7.stop();
+
+    return 0;
 }

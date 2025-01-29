@@ -1,5 +1,6 @@
 #include "tensor4D.h"
 #include "conv2d.h"
+#include <cassert>
 
 
 // Apply ReLU activation function
@@ -92,8 +93,12 @@ Tensor4D Conv2d::convolution_2d(const Tensor4D& input,
     int H = input.getH();
     int W = input.getW();
 
+    int out_channels = kernel.getN();
+    int in_channels = kernel.getC();
     int k_height = kernel.getH();
     int k_width = kernel.getW();
+
+    assert(("Input tensor channels and Filter channels are not matching", C==in_channels));
 
     int out_height = (H - k_height + 2 * padding) / stride + 1;
     int out_width = (W - k_width + 2 * padding) / stride + 1;
@@ -122,6 +127,56 @@ Tensor4D Conv2d::convolution_2d(const Tensor4D& input,
                 }
             }
         }
+    }
+    return output;
+}
+
+
+Tensor4D Conv2d::convolution_2d(const Tensor4D& input,
+                    const std::string &filename,
+                    int stride = 1, int padding = 0, bool bias=false) {
+    int N = input.getN();
+    int C = input.getC();
+    int H = input.getH();
+    int W = input.getW();
+
+    Tensor4D kernel = Tensor4D::fromNPY(filename+"_weight.npy");
+    
+    int out_channels = kernel.getN();
+    int in_channels = kernel.getC();
+    int k_height = kernel.getH();
+    int k_width = kernel.getW();
+
+    assert(("Input tensor channels and Filter channels are not matching", C==in_channels));
+
+    int out_height = (H - k_height + 2 * padding) / stride + 1;
+    int out_width = (W - k_width + 2 * padding) / stride + 1;
+
+    // Resize the output tensor
+    Tensor4D output(N, out_channels, out_height, out_width);
+
+    for (int n = 0; n < N; ++n) {
+        for (int kn = 0; kn < out_channels; ++kn) { // Kernel output channels
+            for (int h = 0; h < out_height; ++h) {
+                for (int w = 0; w < out_width; ++w) {
+                    float sum = 0.0f;
+                    for (int c = 0; c < C; ++c) {
+                        for (int kh = 0; kh < k_height; ++kh) {
+                            for (int kw = 0; kw < k_width; ++kw) {
+                                sum += input.at(n,c,h + kh,w + kw) * 
+                                        kernel.at(kn,c,kh,kw);
+                            }
+                        }
+                    }
+                    output.at(n,kn,h,w) = sum;
+                }
+            }
+        }
+    }
+    if (bias){
+        std::string filepath = filename+"_bias.npy";
+        Tensor4D bias = Tensor4D::fromNPY(filepath);
+        output.add(bias);
     }
     return output;
 }

@@ -17,8 +17,9 @@ public:
     void applyBatchNorm(Tensor4D& tensor, float epsilon);
 
     Tensor4D convolution_2d(const Tensor4D& input,const Tensor4D& kernel, int stride, int padding);
+    Tensor4D convolution_2d(const Tensor4D& input,const std::string& filename, int stride, int padding, bool bias);
     
 };
 
 
-#endif // TENSOR4D_H
+#endif //CONV2D_H

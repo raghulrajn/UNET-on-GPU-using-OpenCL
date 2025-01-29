@@ -5,6 +5,8 @@
 #include <chrono>
 #include "timer.h"
 #include "tensor4D.h"
+#include "cnpy/cnpy.h"
+#include <opencv2/opencv.hpp>
 
     // Constructor
 Tensor4D::Tensor4D(int n, int c, int h, int w)
@@ -37,8 +39,8 @@ const float& Tensor4D::at(int n, int c, int h, int w) const {
 
 // Print tensor dimensions
 void Tensor4D::printDimensions() const {
-    std::cout << "Tensor Dimensions: N=" << N
-                << ", C=" << C << ", H=" << H << ", W=" << W << std::endl;
+    std::cout << "("<< N
+                << ", " << C << ", " << H << ", " << W <<")"<< std::endl;
 }
 
 void Tensor4D::setRandomValues(float mean, float std) {
@@ -286,5 +288,93 @@ Tensor4D Tensor4D::upsample(int newH, int newW) const {
     }
 
     return result;
+}
+
+Tensor4D Tensor4D::extract(int newH, int newW) {
+        int startH = (H - newH) / 2;
+        int startW = (W - newW) / 2;
+        
+        Tensor4D centerTensor(N, C, newH, newW);
+        
+        for (int n = 0; n < N; ++n) {
+            for (int c = 0; c < C; ++c) {
+                for (int h = 0; h < newH; ++h) {
+                    for (int w = 0; w < newW; ++w) {
+                        centerTensor.data[n][c][h][w] = data[n][c][startH + h][startW + w];
+                    }
+                }
+            }
+        }
+        return centerTensor;
+    }
+
+Tensor4D Tensor4D::fromNPY(const std::string &filename) {
+    cnpy::NpyArray arr = cnpy::npy_load(filename);
+    float* raw_data = arr.data<float>();
+    int n,c,h,w;
+    if (arr.shape.size() == 1) {
+        // For 1D array (e.g., 128, which could be interpreted as (1, 1, 1, 128))
+        n = 1;
+        c = 1;
+        h = 1;
+        w = arr.shape[0];
+    } else if (arr.shape.size() == 2) {
+        // For 2D array, assuming it is a (1, 1, 64, 64) shape
+        n = 1;
+        c = 1;
+        h = arr.shape[0];
+        w = arr.shape[1];
+    } else if (arr.shape.size() == 4) {
+        // For 4D array, it is in the format (n, c, h, w)
+        n = arr.shape[0];
+        c = arr.shape[1];
+        h = arr.shape[2];
+        w = arr.shape[3];
+    } 
+    else {
+        throw std::runtime_error("Unsupported kernel shape.");
+    }
+    Tensor4D kernel(n,c,h,w);
+    float* data = arr.data<float>();
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < c; ++j) {
+            for (int x = 0; x < h; ++x) {
+                for (int y = 0; y < w; ++y) {
+                    kernel.at(i, j,x, y) = data[(i * c * h * w) + (j * h * w) + (x * w) + y];
+                }
+            }
+        }
+    }
+    return kernel;
+}
+
+Tensor4D Tensor4D::fromJPG(const std::string &filename) {
+    cv::Mat img = cv::imread(filename, cv::IMREAD_COLOR);
+    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+    int h = img.rows;
+    int w = img.cols;
+    Tensor4D tensor(1, 3, h, w);
+    for (int c = 0; c < 3; ++c) {
+        for (int i = 0; i < h; ++i) {
+            for (int j = 0; j < w; ++j) {
+                tensor.data[0][c][i][j] = img.at<cv::Vec3b>(i, j)[c] / 255.0f;
+            }
+        }
+    }
+    return tensor;
+}
+
+void Tensor4D::saveAsJPG(const std::string &filename) {
+    cv::Mat img(H, W, CV_8UC3);
+    for (int i = 0; i < H; ++i) {
+        for (int j = 0; j < W; ++j) {
+            img.at<cv::Vec3b>(i, j) = cv::Vec3b(
+                static_cast<unsigned char>(data[0][2][i][j] * 255),
+                static_cast<unsigned char>(data[0][1][i][j] * 255),
+                static_cast<unsigned char>(data[0][0][i][j] * 255)
+            );
+        }
+    }
+    cv::imwrite(filename, img);
 }
 
