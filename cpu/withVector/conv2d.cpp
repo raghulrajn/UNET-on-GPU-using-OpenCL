@@ -3,7 +3,20 @@
 #include <cassert>
 
 
-// Apply ReLU activation function
+/**
+ * @brief Applies Relu activation to each channel of the input tensor.
+ * 
+ * The ReLU activation function replaces all negative values in the tensor with zero
+ * while leaving all positive values unchanged.
+ * 
+ * @param tensor The input 4D tensor (N x C x H x W), where:
+ *        - `N`: Number of samples in the batch.
+ *        - `C`: Number of channels.
+ *        - `H`: Height of each sample.
+ *        - `W`: Width of each sample.
+ * 
+ * @note This function modifies the input `tensor` in place.
+ */
 void Conv2d::applyReLU(Tensor4D& tensor) {
     for (int n = 0; n < tensor.getN(); ++n) {
         for (int c = 0; c < tensor.getC(); ++c) {
@@ -18,7 +31,26 @@ void Conv2d::applyReLU(Tensor4D& tensor) {
     }
 }
 
-    // Apply Max Pooling
+/**
+ * @brief Applies Max pooling to each channel of the input tensor.
+ * 
+ * This function performs Max pooling on a 4D tensor (e.g., a batch of images or feature maps).
+ * It computes the maximum value of each poolHeight x poolWidth(eg. 2x2) each channel across all samples
+ * and place it in the tensor thus reducing the size of the tensor.
+ * 
+ * @param tensor The input 4D tensor (N x C x H x W), where:
+ *        - `N`: Number of samples in the batch.
+ *        - `C`: Number of channels.
+ *        - `H`: Height of each sample.
+ *        - `W`: Width of each sample.
+ * 
+ * @param poolHeight Kernel height for the maxpooling. Usually 2
+ * 
+ * @param poolWidth Kernel Width for the maxpooling. Usually 2
+ * 
+ * @param stride stride length while apply max pooling
+ * @note This function modifies the input `tensor` in place.
+ */
 void Conv2d::applyMaxPool(Tensor4D& tensor, int poolHeight, int poolWidth, int stride) {
     int outputHeight = (tensor.getH() - poolHeight) / stride + 1;
     int outputWidth = (tensor.getW() - poolWidth) / stride + 1;
@@ -47,7 +79,24 @@ void Conv2d::applyMaxPool(Tensor4D& tensor, int poolHeight, int poolWidth, int s
     tensor = std::move(pooledTensor);
 }
 
-// Apply Batch Normalization
+/**
+ * @brief Applies Batch Normalization to each channel of the input tensor.
+ * 
+ * This function performs Batch Normalization on a 4D tensor (e.g., a batch of images or feature maps).
+ * It computes the mean and variance for each channel across all samples and spatial locations,
+ * and normalizes the tensor by subtracting the mean and dividing by the square root of the variance.
+ * An epsilon value is used to prevent division by zero during the normalization.
+ * 
+ * @param tensor The input 4D tensor (N x C x H x W), where:
+ *        - `N`: Number of samples in the batch.
+ *        - `C`: Number of channels.
+ *        - `H`: Height of each sample.
+ *        - `W`: Width of each sample.
+ * 
+ * @param epsilon A small constant to avoid division by zero during normalization. Default is 1e-5.
+ * 
+ * @note This function modifies the input `tensor` in place.
+ */
 void Conv2d::applyBatchNorm(Tensor4D& tensor, float epsilon = 1e-5) {
     for (int c = 0; c < tensor.getC(); ++c) {
         // Calculate mean and variance for the current channel
@@ -85,13 +134,16 @@ void Conv2d::applyBatchNorm(Tensor4D& tensor, float epsilon = 1e-5) {
     }
 }
 
-Tensor4D Conv2d::convolution_2d(const Tensor4D& input,
+Tensor4D Conv2d::convolution_2d(Tensor4D& input,
                     const Tensor4D& kernel,
                     int stride = 1, int padding = 0) {
     int N = input.getN();
     int C = input.getC();
     int H = input.getH();
     int W = input.getW();
+    if(padding>0){
+        input.addPadding(padding, padding);
+    }
 
     int out_channels = kernel.getN();
     int in_channels = kernel.getC();
@@ -131,14 +183,54 @@ Tensor4D Conv2d::convolution_2d(const Tensor4D& input,
     return output;
 }
 
-
-Tensor4D Conv2d::convolution_2d(const Tensor4D& input,
+/**
+ * @brief Performs a 2D convolution operation on a 4D input tensor using the specified kernel and parameters.
+ * 
+ * This function applies a 2D convolution to a batch of images (or feature maps) stored in a 4D tensor.
+ * The convolution is performed using a kernel loaded from the .npy, with adjustable stride,
+ * padding, and an option to include bias.
+ * 
+ * @param input The input tensor, represented as a 4D tensor (batch_size x channels x height x width).
+ *        - `N`: Number of samples in the batch.
+ *        - `C`: Number of channels.
+ *        - `H`: Height of each sample.
+ *        - `W`: Width of each sample.
+ * 
+ * @param filename The path to the file that contains the convolution kernel weights(.npy format).
+ * 
+ * @param stride The stride value for the convolution operation. Default is 1.
+ *        
+ * @param padding The padding value to be applied to the input before the convolution. Default is 0.
+ *       
+ * @param bias A boolean flag indicating whether to include a bias term in the convolution. Default is false.
+ *        If set to true, a bias term will be added to the output after applying the convolution.
+ * 
+ * @return A new Tensor4D containing the result of the 2D convolution.
+ *         The resulting tensor has the following dimensions:
+ *        - `N`: Number of samples in the batch.
+ *        - `C`: Number of Kernels.
+ *        - `H`: Height of each sample.
+ *        - `W`: Width of each sample.
+ * 
+ * @note The dimensions of the output tensor are computed as follows:
+ *        - `output_height = (input_height + 2 * padding - kernel_height) / stride + 1`
+ *        - `output_width = (input_width + 2 * padding - kernel_width) / stride + 1`
+ *        If these values are not integers, the dimensions will be adjusted accordingly, or an error will be thrown.
+ * 
+ * @throws std::invalid_argument If the kernel file cannot be loaded or if the input tensor dimensions are incompatible
+ *         with the kernel size and stride.
+ */
+Tensor4D Conv2d::convolution_2d(Tensor4D& input,
                     const std::string &filename,
                     int stride = 1, int padding = 0, bool bias=false) {
     int N = input.getN();
     int C = input.getC();
     int H = input.getH();
     int W = input.getW();
+
+    if(padding>0){
+        input.addPadding(padding, padding);
+    }
 
     Tensor4D kernel = Tensor4D::fromNPY(filename+"_weight.npy");
     
