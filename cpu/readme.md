@@ -51,17 +51,12 @@ Export cnpy to build path
 export LD_LIBRARY_PATH=cnpy/build:$LD_LIBRARY_PATH
 chmod +r cnpy/build/libcnpy.a
 ```
+Copy cnpy folder to withVector folder
 
 ### To compile
 ```
-g++ -std=c++17 -I/cnpy -I/usr/include/eigen3 -L/cnpy/build -o unet conv2D.cpp cnpy/build/libcnpy.a -lz `pkg-config --cflags --libs opencv4`
-```
-
-### Using Maketools
-```
-cd cpu
+cd withVector
 make
-./unet
 ```
 
 ### Link to documentation
