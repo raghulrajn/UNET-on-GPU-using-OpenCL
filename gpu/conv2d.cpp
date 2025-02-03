@@ -96,7 +96,7 @@ class GPUInit {
 		convKernel.setArg(11, padding); // Padding
         // Set up work sizes (output size)
 		cl::Event convevent;
-		cl::NDRange global(N, outH, outW); // (width * height * output channels, batch size)
+		cl::NDRange global(C, outH, outW); // (width * height * output channels, batch size)
 		queue.enqueueNDRangeKernel(convKernel, cl::NullRange, global, cl::NDRange(),NULL,&convevent);
         // Read the output back to the host
 		pipeBuffer = outputBuffer;
