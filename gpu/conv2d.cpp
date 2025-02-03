@@ -20,6 +20,7 @@
 #include <ctime>
 #include <random>
 #include <chrono>
+#include <opencv2/opencv.hpp>
 class GPUInit {
 
 	private:
@@ -31,6 +32,10 @@ class GPUInit {
 		cl::Kernel convKernel;
 		cl::Kernel reluKernel;
 		cl::Kernel maxpoolKernel;
+		cl::Kernel meanKernel;
+		cl::Kernel varianceKernel;
+		// cl::Kernel upsampleKernel;
+		cl::Kernel batchnormKernel;
 
 		cl::Buffer pipeBuffer;
 		std::vector<cl::Device> devices;
@@ -52,11 +57,15 @@ class GPUInit {
 			convKernel = cl::Kernel(program, "conv2d");
 			reluKernel = cl::Kernel(program, "relu_activation");
 			maxpoolKernel = cl::Kernel(program, "maxpool");
+			meanKernel = cl::Kernel(program, "batchMean");
+			varianceKernel = cl::Kernel(program, "batchVariance");
+			batchnormKernel = cl::Kernel(program, "batch_norm");
+
+
 		} catch (OpenCL::Error &e) {
 			std::cerr << "Error creating kernel: " << e.what() << std::endl;
 			throw std::runtime_error("Failed to create kernel.");
 		}
-
 	}
 
 	void getGpuDetails(){
@@ -96,11 +105,12 @@ class GPUInit {
 		convKernel.setArg(11, padding); // Padding
         // Set up work sizes (output size)
 		cl::Event convevent;
-		cl::NDRange global(C, outH, outW); // (width * height * output channels, batch size)
+		cl::NDRange global(C, outH, outW);
 		queue.enqueueNDRangeKernel(convKernel, cl::NullRange, global, cl::NDRange(),NULL,&convevent);
-        // Read the output back to the host
+
 		pipeBuffer = outputBuffer;
-		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float)*output.size(), output.data(),NULL,&convevent);
+		// Read the output back to the host
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float)*output.size(), output.data(),NULL,&convevent);
 		queue.finish();
 
 		Core::TimeSpan timeGpu = OpenCL::getElapsedTime(convevent);
@@ -110,10 +120,10 @@ class GPUInit {
 
 	std::vector<float> relu(std::vector<float> &input, int N, int C, int H, int W){
 		std::vector<float> output(N*C*H*W);
-		//cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
 		cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * input.size());
-		reluKernel.setArg(0, pipeBuffer);  // input tensor
-		//reluKernel.setArg(0, inputBuffer);  // input tensor
+		// reluKernel.setArg(0, pipeBuffer);  // input tensor
+		reluKernel.setArg(0, inputBuffer);  // input tensor
 		reluKernel.setArg(1, outputBuffer); // output tensor
 		reluKernel.setArg(2, N*C*H*W); // size of the input tensor
 
@@ -124,7 +134,7 @@ class GPUInit {
 		cl::Event reluevent;
 		queue.enqueueNDRangeKernel(reluKernel, cl::NullRange, global, local,NULL,&reluevent);
 		queue.finish();
-		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * input.size(), output.data(),NULL,&reluevent);
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * input.size(), output.data(),NULL,&reluevent);
 		pipeBuffer = outputBuffer;
 		Core::TimeSpan timeGpu = OpenCL::getElapsedTime(reluevent);
 		std::cout<<"Relu GPU time is "<<timeGpu<<std::endl;
@@ -136,10 +146,10 @@ class GPUInit {
 		int outH = (H - pool_size) / stride + 1;
 		int outW = (W - pool_size) / stride + 1;
 		std::vector<float> output(N*C*outH*outW);
-		//cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
 		cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * output.size());
 
-		maxpoolKernel.setArg(0, pipeBuffer);
+		maxpoolKernel.setArg(0, inputBuffer);
 		maxpoolKernel.setArg(1, outputBuffer);
 		maxpoolKernel.setArg(2, N); // Batch size
 		maxpoolKernel.setArg(3, C); // Number of channels
@@ -164,6 +174,112 @@ class GPUInit {
 		return output;
 	}
 
+	 std::vector<float> mean(std::vector<float>& input, int N, int C, int H, int W){
+		std::vector<float> mean(C, 0.0f);
+		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		cl::Buffer meanBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * mean.size());
+		meanKernel.setArg(0, inputBuffer);
+		meanKernel.setArg(1, meanBuffer);
+		meanKernel.setArg(2, N);
+		meanKernel.setArg(3, C);
+		meanKernel.setArg(4, H);
+		meanKernel.setArg(5, W);
+
+		cl::NDRange global(C);
+		cl::NDRange local(1, 1, 1);  // Workgroup size (1x1x1)
+
+        cl::Event meanEvent;
+        queue.enqueueNDRangeKernel(meanKernel, cl::NullRange, global, cl::NDRange(), nullptr, &meanEvent);
+        queue.enqueueReadBuffer(meanBuffer, CL_TRUE, 0, sizeof(float) * mean.size(), mean.data());
+		queue.finish();
+        return mean;
+	}
+
+	 std::vector<float> variance(std::vector<float>& input,std::vector<float>& mean, int N, int C, int H, int W){
+		std::vector<float> variance(C, 0.0f);
+		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		cl::Buffer meanBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * mean.size(), mean.data());
+		cl::Buffer varianceBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * variance.size());
+		varianceKernel.setArg(0, inputBuffer);
+		varianceKernel.setArg(1, meanBuffer);
+		varianceKernel.setArg(2, varianceBuffer);
+		varianceKernel.setArg(3, N);
+		varianceKernel.setArg(4, C);
+		varianceKernel.setArg(5, H);
+		varianceKernel.setArg(6, W);
+
+		cl::NDRange global(C);
+		cl::NDRange local(1, 1, 1);  // Workgroup size (1x1x1)
+
+        cl::Event vEvent;
+        queue.enqueueNDRangeKernel(varianceKernel, cl::NullRange, global, cl::NDRange(), nullptr, &vEvent);
+        queue.enqueueReadBuffer(varianceBuffer, CL_TRUE, 0, sizeof(float) * variance.size(), variance.data());
+		queue.finish();
+        return variance;
+	}
+	// Batch Normalization
+    std::vector<float> batchnorm(std::vector<float>& input, int N, int C, int H, int W) {
+        // Output tensor
+		std::vector<float>gamma(C,1.0f);
+		std::vector<float>beta(C, 0.0f);
+        std::vector<float> output(N * C * H * W);
+		std::vector<float> mean(C, 0.0f);
+		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
+		cl::Buffer meanBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * mean.size());
+		meanKernel.setArg(0, inputBuffer);
+		meanKernel.setArg(1, meanBuffer);
+		meanKernel.setArg(2, N);
+		meanKernel.setArg(3, C);
+		meanKernel.setArg(4, H);
+		meanKernel.setArg(5, W);
+
+		cl::NDRange global(C);
+		cl::NDRange local(1, 1, 1);  // Workgroup size (1x1x1)
+
+        cl::Event meanEvent;
+        queue.enqueueNDRangeKernel(meanKernel, cl::NullRange, global, cl::NDRange(), nullptr, &meanEvent);
+
+		std::vector<float> variance(C, 0.0f);
+		cl::Buffer varianceBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * variance.size());
+		varianceKernel.setArg(0, inputBuffer);
+		varianceKernel.setArg(1, meanBuffer);
+		varianceKernel.setArg(2, varianceBuffer);
+		varianceKernel.setArg(3, N);
+		varianceKernel.setArg(4, C);
+		varianceKernel.setArg(5, H);
+		varianceKernel.setArg(6, W);
+
+		cl::NDRange vglobal(C);
+        cl::Event vEvent;
+        queue.enqueueNDRangeKernel(varianceKernel, cl::NullRange, vglobal, cl::NDRange(), nullptr, &vEvent);
+
+        cl::Buffer gammaBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * gamma.size(), gamma.data());
+        cl::Buffer betaBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * beta.size(), beta.data());
+		cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * output.size());
+
+		// Set kernel arguments
+        batchnormKernel.setArg(0, inputBuffer);
+        batchnormKernel.setArg(1, gammaBuffer);
+        batchnormKernel.setArg(2, betaBuffer);
+        batchnormKernel.setArg(3, meanBuffer);
+        batchnormKernel.setArg(4, varianceBuffer);
+        batchnormKernel.setArg(5, outputBuffer);
+        batchnormKernel.setArg(6, N);
+        batchnormKernel.setArg(7, C);
+		batchnormKernel.setArg(8, H);
+		batchnormKernel.setArg(9, W);
+
+		// Launch kernel
+        cl::NDRange bglobal(C, H , W);
+        cl::Event batchnormevent;
+        queue.enqueueNDRangeKernel(batchnormKernel, cl::NullRange, bglobal, cl::NDRange(), nullptr, &batchnormevent);
+        queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * output.size(), output.data());
+		queue.finish();
+
+		Core::TimeSpan timeGpu = OpenCL::getElapsedTime(batchnormevent);
+		std::cout<<"Batchnorm GPU time is "<<timeGpu<<std::endl;
+        return output;
+    }
 };
 
 void convolution_2d_flattened(const std::vector<float>& flattened_input,
@@ -243,6 +359,61 @@ public:
     }
 };
 
+std::vector<float> readImage(const std::string filepath){
+	 cv::Mat image = cv::imread(filepath, cv::IMREAD_COLOR);
+    if (image.empty()) {
+        std::cerr << "Could not open or find the image!" << std::endl;
+        exit(1);
+    }
+    // Ensure the image is in RGB format (OpenCV loads in BGR by default)
+    cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+
+    // Flatten the image into a 1D array
+    std::vector<float> flatArray;
+    flatArray.reserve(image.rows * image.cols * image.channels());
+
+    for (int i = 0; i < image.rows; ++i) {
+        for (int j = 0; j < image.cols; ++j) {
+            cv::Vec3b pixel = image.at<cv::Vec3b>(i, j);
+            flatArray.push_back(pixel[0]);  // Red channel
+            flatArray.push_back(pixel[1]);  // Green channel
+            flatArray.push_back(pixel[2]);  // Blue channel
+        }
+    }
+    return flatArray;
+}
+
+void printTensor(std::vector<float> input, int N, int C, int H, int W){
+	for(int n=0; n<N; n++){
+		for(int c=0; c<C;c++){
+			std::cout<<"channel "<<c<<std::endl;
+			for(int h=0;h<H;h++){
+				for(int w=0;w<W;w++){
+					std::cout<<input[n * C * H * W + c * H * W + h * W + w]<<" ";
+				}
+				std::cout<<"\n";
+			}
+			std::cout<<"\n";
+		}
+	}
+}
+
+void compareTensors(std::vector<float> arr1, std::vector<float> arr2, float tolerance = 0.0005){
+	int count=0;
+	if(arr1.size() != arr2.size()){
+		std::cout<<"[ERROR] Comparing Unequal vectors"<<std::endl;
+		return;
+	}
+	for(auto i=0; i<arr1.size();i++){
+		if(std::abs(arr1[i]-arr2[i])>tolerance){
+			++count;
+		}
+	}
+	std::cout<<"Number of incorrect values = "<<count<<std::endl;
+	std::cout<<"Total values: "<<arr1.size()<<std::endl;
+	std::cout<<"% of error = "<<((float)count/float(arr1.size()))*100<<std::endl;
+}
+
 int main() {
     GPUInit gpu = GPUInit();
 	gpu.getGpuDetails();
@@ -252,45 +423,47 @@ int main() {
 
     // Define the distribution range (0, 256)
     std::uniform_real_distribution<float> dis(0.0f, 256.0f);
-	std::uniform_real_distribution<float> ker(0.0f, 10.0f);
+	 std::uniform_real_distribution<float> ker(0.0f, 10.0f);
 
     // Define input dimensions
     int N = 1;     // Batch size
     int C = 3;     // Channels in the input
-    int H = 256;    // Height of the input
-    int W = 256;    // Width of the input
+    int H = 576;    // Height of the input
+    int W = 576;    // Width of the input
     int Kh = 3;    // Kernel height
     int Kw = 3;    // Kernel width
-    int OutC = 128; // Output channels
+    int OutC = 64; // Output channels
     int stride = 1; // Stride
     int padding = 0; // Padding
 
     // Create buffers for input and kernel
-    std::vector<float> inputTensor(N * C * H * W, 2.0f);
+    std::vector<float> inputTensor = readImage("/zhome/navanerj/Documents/Conv2d/src/sample.jpg");
+    // std::vector<float> inputTensor(N * C * H * W, 1.0f);//2
+
+	// for(auto i=0; i<inputTensor.size();i++){
+	// 	inputTensor[i] = i+1;
+	// }
+
     std::vector<float> kernelTensor(OutC * C * Kh * Kw, 0.5f);
     std::vector<float> outputTensor = gpu.convolution(inputTensor, kernelTensor, N, C, H, W, OutC, Kh, Kw, stride, padding);
-
 	std::vector<float> flattened_output;
-
     // Perform the convolution
 	Timer t1("cpu");
     convolution_2d_flattened(inputTensor, kernelTensor, flattened_output, N, C, H, W, Kh, Kw);
 	t1.stop();
-	int count=0;
+
 	int outH = ((H + 2 * padding - Kh) / stride) + 1;
 	int outW = ((W + 2 * padding - Kw) / stride) + 1;
 	std::vector<float> reluTensor = gpu.relu(outputTensor, N, OutC, outH, outW);
 	std::vector<float> maxpoolTensor = gpu.maxpool(reluTensor, N, OutC, outH, outW,2);
+	std::vector<float> meanTensor = gpu.mean(inputTensor, N, C, H, W);
+	std::vector<float> varianceTensor = gpu.variance(inputTensor, meanTensor,N, C, H, W);
+	std::vector<float> batchNormTensor = gpu.batchnorm(inputTensor,N, C, H, W);
 
 
-	for(auto i=0; i<flattened_output.size();i++){
-		//std::cout<<outputTensor[i]<<" "<<flattened_output[i]<<std::endl;
-		if(std::abs(outputTensor[i]-flattened_output[i])>0.0005){
-			++count;
-		}
-	}
-	std::cout<<"Unequal values: "<<count<<std::endl;
-	std::cout<<"Total values: "<<N*OutC*outH*outW<<std::endl;
-	std::cout<<"% = "<<((float)count/float(N*OutC*outH*outW))*100<<std::endl;
-
+	// printTensor(batchNormTensor,N, C, H, W);
+	// printTensor(reluTensor,N, OutC, outH, outW);
+	// printTensor(maxpoolTensor,N, OutC, outH/2, outW/2);
+	// compareTensors(outputTensor, flattened_output);
 }
+
