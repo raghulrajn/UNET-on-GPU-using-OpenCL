@@ -5,10 +5,11 @@
 __kernel void conv2d(__global float* input1,
                      __global float* kernel1,
                      __global float* output1,
-                     int N,int C,int H,int W,int OutC, int Kh,int Kw,int stride,int padding)
+                     int N, int C, int H, int W, int OutC,
+                     int Kh, int Kw, int stride, int padding)
 {
-    // Global indices for N, output height, and output width
-    int n = get_global_id(0); // Batch index
+    // Global indices for input channel (c), output height (out_h), and output width (out_w)
+    int c = get_global_id(0); // Input channel index
     int out_h = get_global_id(1); // Output height index
     int out_w = get_global_id(2); // Output width index
 
@@ -16,36 +17,38 @@ __kernel void conv2d(__global float* input1,
     int outH = (H + 2 * padding - Kh) / stride + 1;
     int outW = (W + 2 * padding - Kw) / stride + 1;
 
-   // Ensure indices are within bounds for the output tensor
-    if (n < N && out_h < outH && out_w < outW) {
-        // Loop over output channels
-        for (int out_c = 0; out_c < OutC; ++out_c) {
-            float sum = 0.0f;
+    // Ensure indices are within bounds for the output tensor
+    if (c < C && out_h < outH && out_w < outW) {
+        // Loop over batch and output channels
+        for (int n = 0; n < N; ++n) {
+            for (int out_c = 0; out_c < OutC; ++out_c) {
+                float sum = 0.0f;
 
-            // Loop over kernel dimensions (Kh, Kw) and input channels (C)
-            for (int kh = 0; kh < Kh; ++kh) {
-                for (int kw = 0; kw < Kw; ++kw) {
-                    // Calculate the input indices with padding
-                    int in_h = out_h * stride + kh - padding;
-                    int in_w = out_w * stride + kw - padding;
+                // Loop over kernel dimensions (Kh, Kw) and input channels (C)
+                for (int kh = 0; kh < Kh; ++kh) {
+                    for (int kw = 0; kw < Kw; ++kw) {
+                        // Calculate the input indices with padding
+                        int in_h = out_h * stride + kh - padding;
+                        int in_w = out_w * stride + kw - padding;
 
-                    // Check if the input indices are within bounds
-                    if (in_h >= 0 && in_h < H && in_w >= 0 && in_w < W) {
-                        // Loop over input channels (C)
-                        for (int c = 0; c < C; ++c) {
+                        // Check if the input indices are within bounds
+                        if (in_h >= 0 && in_h < H && in_w >= 0 && in_w < W) {
+                            // Calculate flattened indices for input and kernel tensors
                             int inputIdx = n * C * H * W + c * H * W + in_h * W + in_w;
                             int kernelIdx = out_c * C * Kh * Kw + c * Kh * Kw + kh * Kw + kw;
+
+                            // Accumulate the convolution result
                             sum += input1[inputIdx] * kernel1[kernelIdx];
                         }
                     }
                 }
+
+                // Correct flattened index for output tensor (1D index across all N, OutC, outH, outW)
+                int outputIdx = n * OutC * outH * outW + out_c * outH * outW + out_h * outW + out_w;
+
+                // Store the result in the output buffer
+                output1[outputIdx] = sum;
             }
-
-            // Correct flattened index for output tensor (1D index across all N, OutC, outH, outW)
-            int outputIdx = n * OutC * outH * outW + out_c * outH * outW + out_h * outW + out_w;
-
-            // Store the result in the output buffer
-            output1[outputIdx] = sum;
         }
     }
 }
