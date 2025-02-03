@@ -53,6 +53,7 @@ __kernel void conv2d(__global float* input1,
     }
 }
 
+
 __kernel void relu_activation(__global float* input,
                                __global float* output,
                                const int totalsize)
@@ -108,3 +109,99 @@ __kernel void maxpool(
     int outputIndex = n * C * (H / stride) * (W / stride) + c * (H / stride) * (W / stride) + out_h * (W / stride) + out_w;
     output[outputIndex] = max_val;
 }
+
+__kernel void batchMean(__global const float* input,
+                                __global float* mean_output,
+                                const int N,  // Batch size
+                                const int C,  // Number of channels
+                                const int H,  // Input height
+                                const int W)  // Input width
+{
+    int c = get_global_id(0);  // Channel index
+
+    // Ensure we don't exceed the number of channels
+    if (c < C) {
+        float mean = 0.0f;
+        int channel_size = N * H * W;
+
+        // Calculate mean for the current channel (sum across all batches and spatial dimensions)
+        for (int n = 0; n < N; ++n) {
+            for (int h = 0; h < H; ++h) {
+                for (int w = 0; w < W; ++w) {
+                    int idx = n * C * H * W + c * H * W + h * W + w;
+                    mean += input[idx];
+                }
+            }
+        }
+
+        // Store the mean for the current channel
+        mean_output[c] = mean / channel_size;
+    }
+}
+
+__kernel void batchVariance(__global const float* input,
+                                    __global const float* mean_input,
+                                    __global float* variance_output,
+                                    const int N,  // Batch size
+                                    const int C,  // Number of channels
+                                    const int H,  // Input height
+                                    const int W)  // Input width
+{
+    int c = get_global_id(0);  // Channel index
+
+    // Ensure we don't exceed the number of channels
+    if (c < C) {
+        float variance = 0.0f;
+        int channel_size = N * H * W;
+
+        // Calculate variance for the current channel (sum of squared differences from mean)
+        for (int n = 0; n < N; ++n) {
+            for (int h = 0; h < H; ++h) {
+                for (int w = 0; w < W; ++w) {
+                    int idx = n * C * H * W + c * H * W + h * W + w;
+                    float diff = input[idx] - mean_input[c];
+                    variance += diff * diff;
+                }
+            }
+        }
+        // Store the variance for the current channel
+        variance_output[c] = variance / channel_size;
+    }
+}
+
+__kernel void batch_norm(__global const float* input,
+                         __global const float* gamma,
+                         __global const float* beta,
+                         __global const float* mean_input,
+                         __global const float* variance_input,
+                         __global float* output,
+                         const int N,  // Batch size
+                         const int C,  // Number of channels
+                         const int H,  // Input height
+                         const int W)  // Input width
+{
+    int c = get_global_id(0);  // Channel index
+    int h = get_global_id(1);  // Height index
+    int w = get_global_id(2);  // Width index
+
+    // Ensure we don't exceed the input dimensions
+    if (c < C && h < H && w < W) {
+        // Get the channel's mean and variance
+        float mean = mean_input[c];
+        float variance = variance_input[c];
+        float inv_std = 1.0f / sqrt(variance + 1e-5f); // epsilon for numerical stability
+
+        // Barrier to synchronize before starting normalization
+        barrier(CLK_GLOBAL_MEM_FENCE);
+
+        // Now apply Batch Normalization to each element for the current (n, c, h, w)
+        for (int n = 0; n < N; ++n) {
+            int idx = n * C * H * W + c * H * W + h * W + w;
+            output[idx] = gamma[c] * ((input[idx] - mean) * inv_std) + beta[c];
+        }
+        // Barrier after processing all batch elements
+        barrier(CLK_GLOBAL_MEM_FENCE);
+    }
+}
+
+
