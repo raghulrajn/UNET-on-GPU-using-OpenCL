@@ -710,7 +710,7 @@ int main() {
 	// std::vector<float> varianceTensor = gpu.variance(inputTensor, meanTensor,N, C, H, W);
 	// std::vector<float> batchNormTensor = gpu.batchnorm(inputTensor,N, C, H, W);
 
-	int N = 1; // Number of batches
+    int N = 1; // Number of batches
     int C = 3; // Number of channels
     int H = 5; // Height
     int W = 5; // Width
@@ -744,10 +744,13 @@ int main() {
 	std::vector<float> meanTensor = gpu.mean(tensor1, N, C, H, W);
 	std::vector<float> varianceTensor = gpu.variance(tensor1, meanTensor,N, C, H, W);
 	std::vector<float> batchNormTensor = gpu.batchnorm(tensor1,N, C, H, W);
+	//sample input gpu.concat(tensor1, tensor2, N, C1,C2,H, W) eg. (tensor, tensor2, 1, 3, 3,20, 20) -> returns (1,6,20,20)
 	std::vector<float> concatTensor = gpu.concat(tensor1,tensor2, N, C,C, H, W);
 	//printTensor(concatTensor,N, C+C, H, W, "concat");
+	                                     //sample input gpu.upsample(inputtensor, N, C, H, W, newH, newW) eg. (tensor, 1, 3, 10, 10, 20, 20) ->returns (1,3,20,20)
 	std::vector<float> upsampledTensor = gpu.upsample(tensor1, N,C, H, W, H*2, W*2);
 	//printTensor(upsampledTensor,N, C, H*2, W*2,"upsampling");
+	 //sample input gpu.extract(inputtensor, N, C, H, W, newH, newW) eg. (tensor, 1, 3, 20, 20, 10, 10) -> return (1,3,10,10)
 	std::vector<float> centerTensor = gpu.extract(tensor1, N, C, H, W, H/2, W/2);
 	//printTensor(centerTensor,N, C, H/2, W/2,"center");
 	printPerformace(gpu);
