@@ -68,7 +68,7 @@ class GPUInit {
 			batchnormKernel = cl::Kernel(program, "batch_norm");
 			concatKernel    = cl::Kernel(program, "concatenate_tensors");
 			extractKernel   = cl::Kernel(program, "extract_center");
-			upsampleKernel  = cl::Kernel(program, "upsample");
+			upsampleKernel  = cl::Kernel(program, "upsample_");
 
 
 		} catch (OpenCL::Error &e) {
@@ -605,61 +605,66 @@ void printPerformace(GPUInit gpu){
 	std::stringstream str1;
 	str1 << std::setiosflags(std::ios::left) << std::setw(20) << "Functionality";
 	str1 << std::setiosflags(std::ios::right);
-	str1 << " " << std::setw(9) << "| CpuTime |";
-	str1 << " " << std::setw(9) << "GPU executionTime |";
-	str1 << " " << std::setw(9) << "GPU dataTransferTime |";
-	str1 << " " << std::setw(9) << "GPU Total Time |";
-	str1 << " " << std::setw(9) << "Speedup |";
+	str1 << " " << std::setw(9) << "| CpuTime(ms) |";
+	str1 << " " << std::setw(9) << "GPU executionTime(ms) |";
+	str1 << " " << std::setw(9) << "GPU dataTransferTime(ms) |";
+	str1 << " " << std::setw(9) << "GPU Total Time(ms) |";
+	str1 << " " << std::setw(9) << "Speedup% |";
 	std::cout << str1.str() << std::endl;
-
+	double cpu_conv = 50586;
+	double cpu_relu = 1355;
+	double cpu_maxpool = 1241;
+	double cpu_batchNorm = 1048;
+	double cpu_upsample = 1253;
+	double cpu_concat = 212;
 	std::stringstream str;
 	str << std::setiosflags(std::ios::left) << std::setw(20) << "Convolution";
 	str << std::setiosflags(std::ios::right);
-	str << " " << std::setw(10) << "XX";
-	str << " " << std::setw(12) << gpu.convOp;
-	str << " " << std::setw(15) << gpu.convCopy;
-	str << " " << std::setw(20) << (gpu.convOp+gpu.convCopy);
-	str << " " << std::setw(15) << "XX";
+	str << " " << std::setw(10) << cpu_conv;
+	str << " " << std::setw(15) << gpu.convOp;
+	str << " " << std::setw(20) << gpu.convCopy;
+	str << " " << std::setw(25) << (gpu.convOp+gpu.convCopy);
+	str << " " << std::setw(21) << 100 *cpu_conv/(gpu.convOp+gpu.convCopy);
 	std::cout << str.str() << std::endl;
 
 	std::stringstream relu;
 	relu << std::setiosflags(std::ios::left) << std::setw(20) << "ReLU";
 	relu << std::setiosflags(std::ios::right);
-	relu << " " << std::setw(10) << "XX";
-	relu << " " << std::setw(12) << gpu.reluOp;
-	relu << " " << std::setw(15) << gpu.reluCopy;
-	relu << " " << std::setw(20) << (gpu.reluOp+gpu.reluCopy);
-	relu << " " << std::setw(15) << "XX";
+	relu << " " << std::setw(10) << 1355;
+	relu << " " << std::setw(15) << gpu.reluOp;
+	relu << " " << std::setw(20) << gpu.reluCopy;
+	relu << " " << std::setw(25) << (gpu.reluOp+gpu.reluCopy);
+	relu << " " << std::setw(21) << 100 *cpu_relu/(gpu.reluOp+gpu.reluCopy);
 	std::cout << relu.str() << std::endl;
 
 	std::stringstream maxpool;
 	maxpool << std::setiosflags(std::ios::left) << std::setw(20) << "Maxpool";
 	maxpool << std::setiosflags(std::ios::right);
-	maxpool << " " << std::setw(10) << "XX";
-	maxpool << " " << std::setw(12) << gpu.maxpoolOp;
-	maxpool << " " << std::setw(15) << gpu.maxpoolCopy;
-	maxpool << " " << std::setw(20) << (gpu.maxpoolOp+gpu.maxpoolCopy);
-	maxpool << " " << std::setw(15) << "XX";
+	maxpool << " " << std::setw(10) << cpu_maxpool;
+	maxpool << " " << std::setw(15) << gpu.maxpoolOp;
+	maxpool << " " << std::setw(20) << gpu.maxpoolCopy;
+	maxpool << " " << std::setw(25) << (gpu.maxpoolOp+gpu.maxpoolCopy);
+	maxpool << " " << std::setw(21) << 100 *cpu_maxpool/(gpu.maxpoolOp+gpu.maxpoolCopy);
 	std::cout << maxpool.str() << std::endl;
 
 	std::stringstream bn;
 	bn << std::setiosflags(std::ios::left) << std::setw(20) << "batchNorm";
 	bn << std::setiosflags(std::ios::right);
-	bn << " " << std::setw(10) << "XX";
-	bn << " " << std::setw(12) << gpu.bnOp;
-	bn << " " << std::setw(15) << gpu.bnCopy;
-	bn << " " << std::setw(20) << (gpu.bnOp+gpu.bnCopy);
-	bn << " " << std::setw(15) << "XX";
+	bn << " " << std::setw(10) << cpu_batchNorm;
+	bn << " " << std::setw(15) << gpu.bnOp;
+	bn << " " << std::setw(20) << gpu.bnCopy;
+	bn << " " << std::setw(25) << (gpu.bnOp+gpu.bnCopy);
+	bn << " " << std::setw(21) << 100 *cpu_batchNorm/(gpu.bnOp+gpu.bnCopy);
 	std::cout << bn.str() << std::endl;
 
 	std::stringstream upsample;
 	upsample << std::setiosflags(std::ios::left) << std::setw(20) << "Upsampling";
 	upsample << std::setiosflags(std::ios::right);
-	upsample << " " << std::setw(10) << "XX";
-	upsample << " " << std::setw(12) << gpu.upsampleOp;
-	upsample << " " << std::setw(15) << gpu.upsampleCopy;
-	upsample << " " << std::setw(20) << (gpu.upsampleOp+gpu.upsampleCopy);
-	upsample << " " << std::setw(15) << "XX";
+	upsample << " " << std::setw(10) << cpu_upsample;
+	upsample << " " << std::setw(15) << gpu.upsampleOp;
+	upsample << " " << std::setw(20) << gpu.upsampleCopy;
+	upsample << " " << std::setw(25) << (gpu.upsampleOp+gpu.upsampleCopy);
+	upsample << " " << std::setw(21) <<100 * cpu_upsample/(gpu.upsampleOp+gpu.upsampleCopy);
 	std::cout << upsample.str() << std::endl;
 
 }
@@ -712,10 +717,10 @@ int main() {
 
     int N = 1; // Number of batches
     int C = 3; // Number of channels
-    int H = 5; // Height
-    int W = 5; // Width
+    int H = 576; // Height
+    int W = 576; // Width
 
-	int outC = 3;
+	int outC = 64;
 	int inC = C;
 	int kh = 3;
 	int kw = 3;
@@ -755,4 +760,3 @@ int main() {
 	//printTensor(centerTensor,N, C, H/2, W/2,"center");
 	printPerformace(gpu);
 }
-
