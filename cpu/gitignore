@@ -1,0 +1,4 @@
+**/kernels/
+**/cnpy/
+**/libtorch/
+**/.vscode/
