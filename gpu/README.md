@@ -4,22 +4,22 @@ This project demonstrates various convolutional neural network (CNN) operations 
 
 ## Features
 
-- **Convolution**: Perform 2D convolution on input tensors.
-- **ReLU Activation**: Apply ReLU activation function to tensors.
-- **Max Pooling**: Perform max pooling on input tensors.
-- **Mean Calculation**: Calculate the mean of input tensors.
-- **Variance Calculation**: Calculate the variance of input tensors.
-- **Batch Normalization**: Apply batch normalization to tensors.
-- **Tensor Concatenation**: Concatenate two tensors along the channel dimension.
-- **Upsampling**: Upsample input tensors using Bilinear interpolation.
-- **Center Extraction**: Extract the center region of input tensors.
+- Convolution
+- ReLU Activation
+- Max Pooling
+- Mean Calculation
+- Variance Calculation
+- Batch Normalization
+- Tensor Concatenation
+- Upsampling
+- Center Extraction
 
 ## Prerequisites
 
 - OpenCL SDK
 - OpenCV
-- Boost
-- CMake
+- cnpy
+- Meson
 
 ## Installation
 
@@ -29,7 +29,7 @@ This project demonstrates various convolutional neural network (CNN) operations 
     sudo apt-get install opencl-headers ocl-icd-opencl-dev
     sudo apt-get install libopencv-dev
     sudo apt-get install libboost-all-dev
-    sudo apt-get install cmake
+    sudo apt-get install cmake,meson
     ```
 
 2. Clone the repository:
