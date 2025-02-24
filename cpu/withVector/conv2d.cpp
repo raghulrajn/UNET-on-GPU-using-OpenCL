@@ -135,7 +135,7 @@ void Conv2d::applyBatchNorm(Tensor4D& tensor, float epsilon = 1e-5) {
 }
 
 Tensor4D Conv2d::convolution_2d(Tensor4D& input,
-                    const Tensor4D& kernel,
+                     Tensor4D& kernel,
                     int stride = 1, int padding = 0) {
     int N = input.getN();
     int C = input.getC();
@@ -220,8 +220,7 @@ Tensor4D Conv2d::convolution_2d(Tensor4D& input,
  * @throws std::invalid_argument If the kernel file cannot be loaded or if the input tensor dimensions are incompatible
  *         with the kernel size and stride.
  */
-Tensor4D Conv2d::convolution_2d(Tensor4D& input,
-                    const std::string &filename,
+Tensor4D Conv2d::convolution_2d(Tensor4D& input,std::string &filename,
                     int stride = 1, int padding = 0, bool bias=false) {
     int N = input.getN();
     int C = input.getC();
@@ -233,6 +232,10 @@ Tensor4D Conv2d::convolution_2d(Tensor4D& input,
     }
 
     Tensor4D kernel = Tensor4D::fromNPY(filename+"_weight.npy");
+
+    std::cout<< "Filter dimensions: ";
+    kernel.printDimensions();
+    std::cout << std::endl;
     
     int out_channels = kernel.getN();
     int in_channels = kernel.getC();

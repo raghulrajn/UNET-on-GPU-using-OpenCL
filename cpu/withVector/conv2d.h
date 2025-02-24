@@ -16,8 +16,8 @@ public:
     void applyMaxPool(Tensor4D& tensor, int poolHeight, int poolWidth, int stride);
     void applyBatchNorm(Tensor4D& tensor, float epsilon);
 
-    Tensor4D convolution_2d(const Tensor4D& input,const Tensor4D& kernel, int stride, int padding);
-    Tensor4D convolution_2d(const Tensor4D& input,const std::string& filename, int stride, int padding, bool bias);
+    Tensor4D convolution_2d(Tensor4D& input, Tensor4D& kernel, int stride, int padding);
+    Tensor4D convolution_2d(Tensor4D& input, std::string& filename, int stride, int padding, bool bias);
     
 };
 
