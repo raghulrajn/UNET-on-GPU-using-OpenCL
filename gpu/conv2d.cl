@@ -2,9 +2,9 @@
 #include "../lib/OpenCL/OpenCLKernel.hpp"  // Hack to make syntax highlighting work
 #endif
 
-__kernel void conv2d(__global float* input1,
-                     __global float* kernel1,
-                     __global float* output1,
+__kernel void conv2d(__global float* inputTensor,
+                     __global float* kernelTensor,
+                     __global float* outputTensor,
                      int N, int C, int H, int W, int OutC,
                      int Kh, int Kw, int stride, int padding)
 {
@@ -38,7 +38,7 @@ __kernel void conv2d(__global float* input1,
                             int kernelIdx = out_c * C * Kh * Kw + c * Kh * Kw + kh * Kw + kw;
 
                             // Accumulate the convolution result
-                            sum += input1[inputIdx] * kernel1[kernelIdx];
+                            sum += inputTensor[inputIdx] * kernelTensor[kernelIdx];
                         }
                     }
                 }
@@ -47,7 +47,8 @@ __kernel void conv2d(__global float* input1,
                 int outputIdx = n * OutC * outH * outW + out_c * outH * outW + out_h * outW + out_w;
 
                 // Store the result in the output buffer
-                output1[outputIdx] = sum;
+                //outputTensor[outputIdx] = (sum > 0) ? sum : 0; //Applying Relu after evenry convolution operation inherently
+                outputTensor[outputIdx] = sum;
             }
         }
     }
@@ -58,9 +59,7 @@ __kernel void relu_activation(__global float* input,
                                __global float* output,
                                const int totalsize)
 {
-    // Global index for accessing the input tensor
     int idx = get_global_id(0);
-    // Ensure index is within bounds of the input tensor size
     if (idx < totalsize) {
         // Apply ReLU: set negative values to zero, leave positive values unchanged
         output[idx] = (input[idx] > 0) ? input[idx] : 0;
@@ -204,4 +203,104 @@ __kernel void batch_norm(__global const float* input,
     }
 }
 
+__kernel void concatenate_tensors(__global const float* tensor1, __global const float* tensor2, __global float* output,
+                                   const unsigned int N1, const unsigned int C1, const unsigned int H1, const unsigned int W1, const unsigned int C2) {
 
+    // Global thread index
+    int n = get_global_id(0);  // Batch index (N1)
+    int c = get_global_id(1);  // Channel index (C3 = C1 + C2)
+    int h = get_global_id(2) / W1;  // Height index (H1)
+    int w = get_global_id(2) % W1;  // Width index (W1)
+
+    // Ensure the thread indexes are within bounds
+    if (n >= N1 || h >= H1 || w >= W1) {
+        return;
+    }
+
+    // Handle the input tensor data depending on the channel index
+    if (c < C1) {
+        // Copy data from tensor1 (first C1 channels)
+        output[((n * C1 + c) * H1 + h) * W1 + w] = tensor1[((n * C1 + c) * H1 + h) * W1 + w];
+    } else {
+        // Copy data from tensor2 (last C2 channels)
+        output[((n * (C1 + C2) + c) * H1 + h) * W1 + w] = tensor2[((n * C2 + (c - C1)) * H1 + h) * W1 + w];
+    }
+}
+
+__kernel void extract_center(
+    __global const float* input,    // Input tensor (flattened 1D)
+    __global float* output,         // Output tensor (flattened 1D)
+    const int N, const int C, const int H, const int W,
+    const int newH, const int newW
+) {
+    int n = get_global_id(0); // Batch index
+    int c = get_global_id(1); // Channel index
+    int idx = get_global_id(2); // Flattened index for (h, w)
+
+    if (n >= N || c >= C || idx >= newH * newW) return;
+
+    int h = idx / newW; // Row index in new tensor
+    int w = idx % newW; // Column index in new tensor
+
+    // Compute start positions
+    int startH = (H - newH) / 2;
+    int startW = (W - newW) / 2;
+
+    // Compute corresponding input index
+    int input_h = startH + h;
+    int input_w = startW + w;
+
+    // Flattened index in input tensor
+    int input_index = ((n * C + c) * H + input_h) * W + input_w;
+    int output_index = ((n * C + c) * newH + h) * newW + w;
+
+    // Copy value
+    output[output_index] = input[input_index];
+}
+
+__kernel void upsample_(
+    __global const float* input,  // Input tensor (flattened 1D)
+    __global float* output,       // Output tensor (flattened 1D)
+    const int N, const int C, const int H, const int W,
+    const int newH, const int newW
+) {
+    int n = get_global_id(0); // Batch index
+    int c = get_global_id(1); // Channel index
+    int idx = get_global_id(2); // Flattened index for (h, w)
+
+    if (n >= N || c >= C || idx >= newH * newW) return;
+
+    int h = idx / newW; // Row index in new tensor
+    int w = idx % newW; // Column index in new tensor
+
+    // Compute source position in input
+    float scaleH = (float)(H - 1) / (newH - 1);
+    float scaleW = (float)(W - 1) / (newW - 1);
+    
+    float srcH = h * scaleH;
+    float srcW = w * scaleW;
+
+    int h1 = (int)srcH;
+    int w1 = (int)srcW;
+    int h2 = min(h1 + 1, H - 1);
+    int w2 = min(w1 + 1, W - 1);
+
+    float dH = srcH - h1;
+    float dW = srcW - w1;
+
+    // Compute indices in flattened buffer
+    int idx11 = ((n * C + c) * H + h1) * W + w1;
+    int idx12 = ((n * C + c) * H + h1) * W + w2;
+    int idx21 = ((n * C + c) * H + h2) * W + w1;
+    int idx22 = ((n * C + c) * H + h2) * W + w2;
+
+    // Bilinear interpolation
+    float value = (1 - dH) * (1 - dW) * input[idx11] +
+                  (1 - dH) * dW * input[idx12] +
+                  dH * (1 - dW) * input[idx21] +
+                  dH * dW * input[idx22];
+
+    // Store in output
+    int output_idx = ((n * C + c) * newH + h) * newW + w;
+    output[output_idx] = value;
+}
