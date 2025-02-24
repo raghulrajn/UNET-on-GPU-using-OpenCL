@@ -61,3 +61,7 @@ This project demonstrates various convolutional neural network (CNN) operations 
 
 - [conv2d.cpp](http://_vscodecontentref_/2): Main source file containing the implementation of CNN operations using OpenCL.
 - `CMakeLists.txt`: CMake configuration file for building the project.
+
+## Performance comparison
+### GPU performance
+![gpu](./utils/gpu.png)
