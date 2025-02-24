@@ -1,1 +1,6 @@
-
+	double cpu_conv = 50586;
+	double cpu_relu = 1355;
+	double cpu_maxpool = 1241;
+	double cpu_batchNorm = 1048;
+	double cpu_upsample = 1253;
+	double cpu_concat = 212;
