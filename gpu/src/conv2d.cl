@@ -258,7 +258,7 @@ __kernel void extract_center(
     output[output_index] = input[input_index];
 }
 
-__kernel void upsample(
+__kernel void upsample_(
     __global const float* input,  // Input tensor (flattened 1D)
     __global float* output,       // Output tensor (flattened 1D)
     const int N, const int C, const int H, const int W,
@@ -304,6 +304,3 @@ __kernel void upsample(
     int output_idx = ((n * C + c) * newH + h) * newW + w;
     output[output_idx] = value;
 }
-
-
-
