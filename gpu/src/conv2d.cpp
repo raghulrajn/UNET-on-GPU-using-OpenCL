@@ -666,8 +666,44 @@ void printPerformace(GPUInit gpu){
 	upsample << " " << std::setw(25) << (gpu.upsampleOp+gpu.upsampleCopy);
 	upsample << " " << std::setw(21) <<100 * cpu_upsample/(gpu.upsampleOp+gpu.upsampleCopy);
 	std::cout << upsample.str() << std::endl;
+	std::cout << "<------------------------------------------------------------------------------------->"<< std::endl;
 
 }
+
+std::vector<float> doubleConvolution(GPUInit gpu, std::vector<float>& input, std::vector<float>& kernel1,std::vector<float>& kernel2, int N, int C, int H, int W, int outC1,int outC2, int kh = 3, int kw=3, int stride = 1, int padding = 0){
+	std::vector<float> outputTensor = gpu.convolution(input, kernel1, N, C, H, W, outC1, kh, kw, stride, padding);
+	std::vector<float> batchNormTensor = gpu.batchnorm(outputTensor,N, C, H, W);
+	std::vector<float> reluTensor = gpu.relu(batchNormTensor, N, gpu._outC, gpu._outH, gpu._outW);
+	std::vector<float> outputTensor2 = gpu.convolution(outputTensor, kernel2, gpu._outC, C, H, W, outC2, kh, kw, stride, padding);
+	std::vector<float> batchNormTensor2 = gpu.batchnorm(outputTensor2,N, C, H, W);
+	std::vector<float> reluTensor2 = gpu.relu(batchNormTensor2, N, gpu._outC, gpu._outH, gpu._outW);
+	printPerformace(gpu);
+	return reluTensor2;
+}
+
+std::vector<float> down(GPUInit gpu, std::vector<float>& input, std::vector<float>& kernel1,std::vector<float>& kernel2, int N, int C, int H, int W, int outC1,int outC2, int kh = 3, int kw=3, int stride = 1, int padding = 0){
+	std::vector<float> maxpoolTensor = gpu.maxpool(input, N, C, H, W, 2);
+	std::vector<float> outputTensor = gpu.convolution(maxpoolTensor, kernel1, N, C, gpu._outH, gpu._outW, outC1, kh, kw, stride, padding);
+	std::vector<float> batchNormTensor = gpu.batchnorm(outputTensor,N, C, H, W);
+	std::vector<float> reluTensor = gpu.relu(batchNormTensor, N, gpu._outC, gpu._outH, gpu._outW);
+	std::vector<float> outputTensor2 = gpu.convolution(reluTensor, kernel2, N, gpu._outC, H, W, outC2, kh, kw, stride, padding);
+	std::vector<float> batchNormTensor2 = gpu.batchnorm(outputTensor2,N, C, H, W);
+	std::vector<float> reluTensor2 = gpu.relu(batchNormTensor2, N, gpu._outC, gpu._outH, gpu._outW);
+	printPerformace(gpu);
+	return reluTensor2;
+}
+
+std::vector<float> up(GPUInit gpu, std::vector<float>& input, std::vector<float>& kernel1,std::vector<float>& kernel2, int N, int C, int H, int W, int outC1,int outC2, int kh = 3, int kw=3, int stride = 1, int padding = 0){
+	std::vector<float> upsampleTensor = gpu.upsample(input, N, C, H, W, H*2, W*2);
+	std::vector<float> outputTensor = gpu.convolution(upsampleTensor, kernel1, N, C, gpu._outH, gpu._outW, outC1, kh, kw, stride, padding);
+	std::vector<float> batchNormTensor = gpu.batchnorm(outputTensor,N, C, H, W);
+	std::vector<float> reluTensor = gpu.relu(batchNormTensor, N, gpu._outC, gpu._outH, gpu._outW);
+	std::vector<float> outputTensor2 = gpu.convolution(outputTensor, kernel2, gpu._outC, C, H, W, outC2, kh, kw, stride, padding);
+	std::vector<float> batchNormTensor2 = gpu.batchnorm(outputTensor2,N, C, H, W);
+	std::vector<float> reluTensor2 = gpu.relu(batchNormTensor2, N, gpu._outC, gpu._outH, gpu._outW);
+	return reluTensor2;
+}
+
 
 int main() {
     GPUInit gpu = GPUInit();
@@ -742,21 +778,54 @@ int main() {
 		tensor1[i] = i+1;
 		tensor2[i] = 1;
 	}
+		                      //outC*inC*kh*kw
+	std::vector<float> kernel1(64*3*3*3);
+	
+	std::vector<float> kernel2(64*64*3*3);
+	
+	std::vector<float> kernel3(64*128*3*3);
+	std::vector<float> kernel4(128*128*3*3);
+	std::vector<float> kernel5(256*128*3*3);
+	std::vector<float> kernel6(256*256*3*3);
+	std::vector<float> kernel7(512*256*3*3);
+	std::vector<float> kernel8(512*512*3*3);
+	std::vector<float> kernel9(1024*512*3*3);
+	std::vector<float> kernel10(1024*1024*3*3);
 
-	std::vector<float> outputTensor = gpu.convolution(tensor1, kernel, N, C, H, W, outC, kh, kw, stride, padding);
-	std::vector<float> reluTensor = gpu.relu(outputTensor, N, gpu._outC, gpu._outH, gpu._outW);
-	std::vector<float> maxpoolTensor = gpu.maxpool(outputTensor, N, gpu._outC, gpu._outH, gpu._outW,2);
-	std::vector<float> meanTensor = gpu.mean(tensor1, N, C, H, W);
-	std::vector<float> varianceTensor = gpu.variance(tensor1, meanTensor,N, C, H, W);
-	std::vector<float> batchNormTensor = gpu.batchnorm(tensor1,N, C, H, W);
-	//sample input gpu.concat(tensor1, tensor2, N, C1,C2,H, W) eg. (tensor, tensor2, 1, 3, 3,20, 20) -> returns (1,6,20,20)
-	std::vector<float> concatTensor = gpu.concat(tensor1,tensor2, N, C,C, H, W);
-	//printTensor(concatTensor,N, C+C, H, W, "concat");
-	                                     //sample input gpu.upsample(inputtensor, N, C, H, W, newH, newW) eg. (tensor, 1, 3, 10, 10, 20, 20) ->returns (1,3,20,20)
-	std::vector<float> upsampledTensor = gpu.upsample(tensor1, N,C, H, W, H*2, W*2);
-	//printTensor(upsampledTensor,N, C, H*2, W*2,"upsampling");
-	 //sample input gpu.extract(inputtensor, N, C, H, W, newH, newW) eg. (tensor, 1, 3, 20, 20, 10, 10) -> return (1,3,10,10)
-	std::vector<float> centerTensor = gpu.extract(tensor1, N, C, H, W, H/2, W/2);
-	//printTensor(centerTensor,N, C, H/2, W/2,"center");
-	printPerformace(gpu);
+	for (size_t i = 0; i < kernel1.size(); ++i) {kernel1[i] = 1;}
+	for (size_t i = 0; i < kernel2.size(); ++i) {kernel2[i] = 1;}
+	for (size_t i = 0; i < kernel3.size(); ++i) {kernel3[i] = 1;}
+	for (size_t i = 0; i < kernel4.size(); ++i) {kernel4[i] = 1;}
+	for (size_t i = 0; i < kernel5.size(); ++i) {kernel5[i] = 1;}
+	for (size_t i = 0; i < kernel6.size(); ++i) {kernel6[i] = 1;}
+	for (size_t i = 0; i < kernel7.size(); ++i) {kernel7[i] = 1;}
+	for (size_t i = 0; i < kernel8.size(); ++i) {kernel8[i] = 1;}
+	for (size_t i = 0; i < kernel9.size(); ++i) {kernel9[i] = 1;}
+	for (size_t i = 0; i < kernel10.size(); ++i) {kernel10[i] = 1;}
+	
+	std::vector<float> output = doubleConvolution(gpu,tensor1,kernel1,kernel2,N,C,H,W,64,64);
+	std::vector<float> output2 = down(gpu,output,kernel3,kernel4,N,64,H,W,64,128);
+	std::vector<float> output3 = down(gpu,output2,kernel5,kernel6,N,128,H/2,W/2,256,256);
+	std::vector<float> output4 = down(gpu,output3,kernel7,kernel8,N,256,H/4,W/4,512,512);
+	std::vector<float> output5 = down(gpu,output4,kernel9,kernel10,N,512,H/6,W/6,1024,1024);
+	
+	// std::vector<float> output5 = up(gpu,output4,kernel7,kernel8,N,512,H/8,W/8,512,512);
+
+
+	// std::vector<float> outputTensor = gpu.convolution(tensor1, kernel, N, C, H, W, outC, kh, kw, stride, padding);
+	// std::vector<float> reluTensor = gpu.relu(outputTensor, N, gpu._outC, gpu._outH, gpu._outW);
+	// std::vector<float> maxpoolTensor = gpu.maxpool(outputTensor, N, gpu._outC, gpu._outH, gpu._outW,2);
+	// std::vector<float> meanTensor = gpu.mean(tensor1, N, C, H, W);
+	// std::vector<float> varianceTensor = gpu.variance(tensor1, meanTensor,N, C, H, W);
+	// std::vector<float> batchNormTensor = gpu.batchnorm(tensor1,N, C, H, W);
+	// //sample input gpu.concat(tensor1, tensor2, N, C1,C2,H, W) eg. (tensor, tensor2, 1, 3, 3,20, 20) -> returns (1,6,20,20)
+	// std::vector<float> concatTensor = gpu.concat(tensor1,tensor2, N, C,C, H, W);
+	// //printTensor(concatTensor,N, C+C, H, W, "concat");
+	//                                      //sample input gpu.upsample(inputtensor, N, C, H, W, newH, newW) eg. (tensor, 1, 3, 10, 10, 20, 20) ->returns (1,3,20,20)
+	// std::vector<float> upsampledTensor = gpu.upsample(tensor1, N,C, H, W, H*2, W*2);
+	// //printTensor(upsampledTensor,N, C, H*2, W*2,"upsampling");
+	//  //sample input gpu.extract(inputtensor, N, C, H, W, newH, newW) eg. (tensor, 1, 3, 20, 20, 10, 10) -> return (1,3,10,10)
+	// std::vector<float> centerTensor = gpu.extract(tensor1, N, C, H, W, H/2, W/2);
+	// //printTensor(centerTensor,N, C, H/2, W/2,"center");
+	// printPerformace(gpu);
 }
