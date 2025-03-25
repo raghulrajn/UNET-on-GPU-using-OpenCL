@@ -1,6 +1,6 @@
 # Conv2D Implementation with OpenCL
 
-This project demonstrates various convolutional neural network (CNN) operations using OpenCL for GPU acceleration. The operations include convolution, ReLU activation, max pooling, mean calculation, variance calculation, batch normalization, tensor concatenation, upsampling, and center extraction.
+This project demonstrates various convolutional neural network (CNN) operations using OpenCL for GPU acceleration. The operations include convolution, ReLU activation, max pooling, batch normalization, tensor concatenation, upsampling and sigmoid activation.
 
 ## Features
 
@@ -12,7 +12,6 @@ This project demonstrates various convolutional neural network (CNN) operations 
 - Batch Normalization
 - Tensor Concatenation
 - Upsampling
-- Center Extraction
 
 ## Prerequisites
 
@@ -39,28 +38,40 @@ This project demonstrates various convolutional neural network (CNN) operations 
     cd gpu
     ```
 
-3. Build the project:
+3. Clone cnpy:
 
     ```sh
-   chmod +x run.sh
-   ./run.sh
+   git clone https://github.com/rogersce/cnpy.git
+   cp cnpy gpc/src
     ```
+## Required final structure
+```
+├── lib
+│   ├── Core
+│   ├── lib
+│   ├── OpenCL
+│   └── vx
+├── src
+│   └── cnpy
+│   ├── conv2d.cl
+│   ├── conv2d.cpp
+├── meson.build
+├── run.sh
+└── utils
+ ```
 
-## Usage
+## Run the code 
 
-1. Run the main executable:
-
-    ```sh
-    cd build
-    ./conv2d
-    ```
-
-2. The program will perform various CNN operations and print the performance metrics.
+```sh
+cd gpu
+chmod +x run.sh
+./run.sh
+```
 
 ## Code Structure
 
-- [conv2d.cpp](http://_vscodecontentref_/2): Main source file containing the implementation of CNN operations using OpenCL.
-- `CMakeLists.txt`: CMake configuration file for building the project.
+- [conv2d.cpp](src/conv2d.cpp): Main source file containing the implementation of Conv2d, Maxpool, Upsampling and UNET operations using OpenCL.
+- [conv2d.cl](src/conv2d.cl): Kernel code for all GPU operations
 
 ## Performance comparison
 ### GPU performance
