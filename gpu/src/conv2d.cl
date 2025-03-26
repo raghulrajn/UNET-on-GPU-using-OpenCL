@@ -45,9 +45,6 @@ __kernel void conv2d(__global float* inputTensor,
 
                 // Correct flattened index for output tensor (1D index across all N, OutC, outH, outW)
                 int outputIdx = n * OutC * outH * outW + out_c * outH * outW + out_h * outW + out_w;
-
-                // Store the result in the output buffer
-                //outputTensor[outputIdx] = (sum > 0) ? sum : 0; //Applying Relu after evenry convolution operation inherently
                 outputTensor[outputIdx] = sum;
             }
         }
@@ -61,8 +58,8 @@ __kernel void relu_activation(__global float* input,
 {
     int idx = get_global_id(0);
     if (idx < totalsize) {
-        // Apply ReLU: set negative values to zero, leave positive values unchanged
-        output[idx] = (input[idx] > 0) ? input[idx] : 0;
+        //set negative values to zero, leave positive values unchanged
+        output[idx] = fmax(0.0f, input[idx]);
     }
 }
 
@@ -92,14 +89,14 @@ __kernel void maxpool(
     // Ensure we don't go out of bounds
     float max_val = -INFINITY;
 
-    // Pool over the window of size pool_size x pool_size
+    // Find max in the window of size pool_size x pool_size
     for (int ph = 0; ph < pool_size; ++ph) {
         for (int pw = 0; pw < pool_size; ++pw) {
             int in_h = start_h + ph;
             int in_w = start_w + pw;
             if (in_h < H && in_w < W) {
                 int inputIndex = n * C * H * W + c * H * W + in_h * W + in_w;
-                max_val = fmax(max_val, input[inputIndex]);
+                max_val = fmax(max_val, input[inputIndex]); //max value in the 2x2 window is set to output
             }
         }
     }
@@ -185,21 +182,14 @@ __kernel void batch_norm(__global const float* input,
 
     // Ensure we don't exceed the input dimensions
     if (c < C && h < H && w < W) {
-        // Get the channel's mean and variance
-        float mean = mean_input[c];
-        float variance = variance_input[c];
-        float inv_std = 1.0f / sqrt(variance + 1e-5f); // epsilon for numerical stability
-
-        // Barrier to synchronize before starting normalization
-        barrier(CLK_GLOBAL_MEM_FENCE);
+        float inv_std = 1.0f / sqrt(variance_input[c] + 1e-5f); / 1+e-5f is added to prevent division by zero
 
         // Now apply Batch Normalization to each element for the current (n, c, h, w)
         for (int n = 0; n < N; ++n) {
             int idx = n * C * H * W + c * H * W + h * W + w;
-            output[idx] = gamma[c] * ((input[idx] - mean) * inv_std) + beta[c];
+            //normVal = gamma * (inputVal - mean) / sqrt(variance + epsilon) + beta
+            output[idx] = gamma[c] * ((input[idx] - mean_input[c]) * inv_std) + beta[c];
         }
-        // Barrier after processing all batch elements
-        barrier(CLK_GLOBAL_MEM_FENCE);
     }
 }
 
@@ -216,8 +206,6 @@ __kernel void concatenate_tensors(__global const float* tensor1, __global const 
     if (n >= N1 || h >= H1 || w >= W1) {
         return;
     }
-
-    // Handle the input tensor data depending on the channel index
     if (c < C1) {
         // Copy data from tensor1 (first C1 channels)
         output[((n * C1 + c) * H1 + h) * W1 + w] = tensor1[((n * C1 + c) * H1 + h) * W1 + w];
@@ -274,25 +262,28 @@ __kernel void upsample_(
     int w = idx % newW; // Column index in new tensor
 
     // Compute source position in input
-    float scaleH = (float)(H - 1) / (newH - 1);
-    float scaleW = (float)(W - 1) / (newW - 1);
+    float scaleH = (float)(H - 1) / (newH - 1); //H = 4, newH = 8, scaleH = 0.5
+    float scaleW = (float)(W - 1) / (newW - 1); //W = 4, newW = 8, scaleW = 0.5
     
-    float srcH = h * scaleH;
-    float srcW = w * scaleW;
-
+    float srcH = h * scaleH; //inputHeight is at scale factor times outputHeight
+    float srcW = w * scaleW; //inputWidth is at scale factor times outputWidth
+    // (h1, w1) topLeft corner
+    // (h1, w2) topRight corner
+    // (h2, w1) bottomLeft corner
+    // (h2, w2) bottomRight corner
     int h1 = (int)srcH;
     int w1 = (int)srcW;
     int h2 = min(h1 + 1, H - 1);
     int w2 = min(w1 + 1, W - 1);
 
-    float dH = srcH - h1;
+    float dH = srcH - h1; //distance between top left corner and inputHeight
     float dW = srcW - w1;
 
-    // Compute indices in flattened buffer
-    int idx11 = ((n * C + c) * H + h1) * W + w1;
-    int idx12 = ((n * C + c) * H + h1) * W + w2;
-    int idx21 = ((n * C + c) * H + h2) * W + w1;
-    int idx22 = ((n * C + c) * H + h2) * W + w2;
+    //Compute indices in flattened buffer of inputTensor
+    int idx11 = (c * H + h1) * W + w1; //topLeft corner
+    int idx12 = (c * H + h1) * W + w2; //topRight corner
+    int idx21 = (c * H + h2) * W + w1; //bottomLeft corner
+    int idx22 = (c * H + h2) * W + w2; //bottomRight corner
 
     // Bilinear interpolation
     float value = (1 - dH) * (1 - dW) * input[idx11] +
@@ -300,7 +291,6 @@ __kernel void upsample_(
                   dH * (1 - dW) * input[idx21] +
                   dH * dW * input[idx22];
 
-    // Store in output
     int output_idx = ((n * C + c) * newH + h) * newW + w;
     output[output_idx] = value;
 }
