@@ -42,7 +42,7 @@ This project demonstrates various convolutional neural network (CNN) operations 
 
     ```sh
    git clone https://github.com/rogersce/cnpy.git
-   cp cnpy gpc/src
+   cp cnpy gpu/src
     ```
 ## Required final structure
 ```
