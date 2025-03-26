@@ -11,6 +11,11 @@ project(
 
 subdir('lib')
 opencv_dep = dependency('opencv4', required : true)
+#absolute path to be changed
+cnpy_dep = declare_dependency(
+    include_directories: include_directories('src/cnpy'),
+    link_args: ['/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/libcnpy.a', '-lz']
+)
 
 executable('conv2d',
     [
@@ -23,6 +28,7 @@ executable('conv2d',
     dependencies : [
         core_dep,
         opencl_dep,
-        opencv_dep
-    ],
+        opencv_dep,
+        cnpy_dep
+    ]
 )
