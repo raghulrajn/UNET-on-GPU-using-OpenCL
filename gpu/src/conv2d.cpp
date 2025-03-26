@@ -21,6 +21,14 @@
 #include <random>
 #include <chrono>
 #include <opencv2/opencv.hpp>
+
+/**
+ * @brief GPUInit class for initializing GPU parameters such as context, command queue, Kernels etc..
+ * 
+ * This class provides all the mentioned functionalities to initialize the GPU and run the kernels on the GPU.
+ * Methods of this class are used to perform convolution, relu, maxpool, batchnorm, concat, upsample and sigmoid operations on the GPU.
+ * Also contains methods to load kernel weights and biases from .npy files.
+ */
 class GPUInit {
 
 	private:
@@ -98,6 +106,27 @@ class GPUInit {
 	double concatOp, concatCopy;
 	double extOp, extCopy;
 	double upsampleOp, upsampleCopy;
+	/**
+	 * @brief Naive Convolution kernel for 2D Convolution
+	 * 
+	 * This function accepts a 4D input tensor (N, C, H, W) and file name of the kernel weights, biases and performs a 2D convolution
+	 * Tensor of shape (N, C, H, W) is convolved with kernel of shape (OutC, C, Kh, Kw) with stride and padding. 
+	 * stride=1 and padding=1 by default, makes input Height and width same as output height and width.
+	 * Input(N,C,H,W) is convolved with kernel(OutC, C, Kh, Kw) to produce output(N, OutC, H, W)
+	 * @param input input tensor in NCHW format
+	 * @param filename name of the pretained kernel and bias (without extension .npy)
+	 * @param N batch size
+	 * @param C number of input channels
+	 * @param H height of the input
+	 * @param W width of the input
+	 * @param OutC number of output channels
+	 * @param Kh kernel height
+	 * @param Kw kernel width
+	 * @param stride stride 
+	 * @param padding padding 
+	 * @return A std::vector<float> convolution output
+	 * 
+	 */
 	std::vector<float> convolution(std::vector<float> &input, std::vector<float> &kernel, int N, int C, int H, int W, int OutC, int Kh, int Kw, int stride, int padding){
 		int outH = (H + 2 * padding - Kh) / stride + 1;
 		int outW = (W + 2 * padding - Kw) / stride + 1;
@@ -135,24 +164,36 @@ class GPUInit {
 		convCopy = convCopy+ OpenCL::getElapsedTime(event[1]).getMilliseconds();
 		return output;
 	}
+	/**
+	 * @brief Relu activation function
+	 * 
+	 * This function accepts a 4D input tensor (N, C, H, W) and performs a ReLU activation function on the input tensor. 
+	 * If the input value is less than 0, it is set to 0 else same value is set.(output = max(0, input))
+	 * @param input input tensor in NCHW format
+	 * @param filename name of the file (without extension) to load.
+	 * @param N batch size
+	 * @param C number of input channels
+	 * @param H height of the input
+	 * @param W width of the input
+	 * @return A std::vector<float> relu activated output
+	 * 
+	 */
 
 	std::vector<float> relu(std::vector<float> &input, int N, int C, int H, int W){
 		std::vector<float> output(N*C*H*W);
 		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * input.size(), input.data());
 		cl::Buffer outputBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * input.size());
-		// reluKernel.setArg(0, pipeBuffer);  // input tensor
+		
 		reluKernel.setArg(0, inputBuffer);  // input tensor
 		reluKernel.setArg(1, outputBuffer); // output tensor
 		reluKernel.setArg(2, N*C*H*W); // size of the input tensor
 
-		// Define the global and local work sizes
 		cl::NDRange global(N*C*H*W);  // Global work size, size of input tensor
-		// Enqueue the kernel for execution
 		cl::Event event[2];
 		queue.enqueueNDRangeKernel(reluKernel, cl::NullRange, global, cl::NDRange(),NULL,&event[0]);
 		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * input.size(), output.data(),NULL,&event[1]);
 		queue.finish();
-		pipeBuffer = outputBuffer;
+		
 		reluOp += OpenCL::getElapsedTime(event[0]).getMilliseconds();
 		reluCopy += OpenCL::getElapsedTime(event[1]).getMilliseconds();
 		
@@ -161,6 +202,22 @@ class GPUInit {
 		_outW = W;
 		return output;
 	}
+	/**
+	 * @brief Maxpool operation
+	 * 
+	 * This function accepts a 4D input tensor (N, C, H, W) and performs a maxpool operation on the input tensor.
+	 * function calculates the output tensor using the maxpool operation with a window size of 2x2 and stride of 2 by default.alignas
+	 * Size of the output tensor is N, C, H/2, W/2. For each cell in output tensor is the maximum value of the 2x2 window in the input tensor strided by 2.
+	 * @param input input tensor in NCHW format
+	 * @param N batch size
+	 * @param C number of input channels
+	 * @param H height of the input
+	 * @param W width of the input
+	 * @param pool_size size of the maxpool window default= 2
+	 * @param stride stride of the maxpool operation default = 2
+	 * @return A std::vector<float> maxpooled output
+	 * 
+	 */
 
 	std::vector<float> maxpool(std::vector<float> &input, int N, int C, int H, int W, int pool_size, int stride=2){
 
@@ -179,11 +236,9 @@ class GPUInit {
 		maxpoolKernel.setArg(6, pool_size); // Pool size
 		maxpoolKernel.setArg(7, stride); // Stride
 
-		// Set up work sizes (output size)
 		cl::NDRange global(N * C * outH * outW); // (Batch * Channels * Output Height * Output Width)
-		cl::NDRange local(1, 1); // Workgroup size (could be optimized further)
+		cl::NDRange local(1, 1); 
 
-		// Enqueue kernel for execution
 		cl::Event event[2];
 		queue.enqueueNDRangeKernel(maxpoolKernel, cl::NullRange, global, local, NULL,&event[0]);
 		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, sizeof(float) * output.size(), output.data(),NULL,&event[1]);
@@ -208,7 +263,7 @@ class GPUInit {
 		meanKernel.setArg(5, W);
 
 		cl::NDRange global(C);
-		cl::NDRange local(1, 1, 1);  // Workgroup size (1x1x1)
+		cl::NDRange local(1, 1, 1); 
 
         cl::Event meanEvent;
         queue.enqueueNDRangeKernel(meanKernel, cl::NullRange, global, cl::NDRange(), nullptr, &meanEvent);
@@ -466,7 +521,14 @@ void convolution_2d_flattened(const std::vector<float>& flattened_input,
         }
     }
 }
-
+//-----------------------------------------------------------------------------Timer Class--------------------------------------------------------------------------------------------
+/**
+ * @brief Timer class for measuring the execution time of a code block.
+ * 
+ * This class provides a simple way to measure the execution time of a code block.
+ * timer starts when the object is created and stops when the object goes out of scope.
+ * total duration can be obtained using the get_total_duration() method.
+ */
 class Timer {
 private:
     std::chrono::high_resolution_clock::time_point start_time;
