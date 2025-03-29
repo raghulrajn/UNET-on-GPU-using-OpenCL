@@ -817,55 +817,88 @@ std::vector<float> up(GPUInit gpu, std::vector<float>& input, std::vector<float>
 
 
 int main() {
-    GPUInit gpu = GPUInit();
-	gpu.getGpuDetails();
+	{
+		GPUInit _gpu = GPUInit();
+		_gpu.getGpuDetails();
+		int n = 1;
+		int c = 1;
+		int h = 5;
+		int w = 5;
+		int out_c = 1;
+		int kh = 3;
+		int kw = 3;
+		std::vector<float> input(n * c * h * w);
+		std::vector<float> input2(n * c * h * w);
+		std::vector<float> filter(out_c * c * kh * kw);
+		//sample gamma, beta, mean, variance values are set for testing purpose
+		std::vector<float> gamma(out_c,0.001f); 
+		std::vector<float> beta(out_c,0.001f);
+		std::vector<float> mean(out_c,0.005f);
+		std::vector<float> variance(out_c,0.005f);
+		//sample values are set for input tensors and filter tensor in row-major format
+		for(auto i=0; i<input.size();i++){
+			input[i] = i+1;
+		}
+		for(auto i=0; i<input2.size();i++){
+			input2[i] = 10;
+		}
+		for(auto i=0; i<filter.size();i++){
+			filter[i] = i+1;
+		}
+		
+		std::vector<float> outputgpuTensor  = _gpu.convolution(input, filter, n, c, h, w, out_c, kh, kw,1,1);
+		std::vector<float> batchNormgpuTensor  = _gpu.batchnormInference(outputgpuTensor,gamma, beta, mean, variance,n, out_c, h, w);
+		std::vector<float> relugpuTensor = _gpu.relu(batchNormgpuTensor, n, out_c, h, w);
+		std::vector<float> maxpoolgpuTensor   = _gpu.maxpool(relugpuTensor, n, out_c, h, w);
+		std::vector<float> upsamplegpuTensor = _gpu.upsample(maxpoolgpuTensor,n, out_c, h/2, w/2, h*2, w*2);
+		
+		printTensor(outputgpuTensor,n, out_c, h, w,"GPU Convolution");
+		printTensor(batchNormgpuTensor,n, out_c, h, w,"GPU BatchNorm");
+		printTensor(relugpuTensor,n, out_c, h, w,"GPU ReLU");
+		printTensor(maxpoolgpuTensor,n, out_c, 5, 5,"GPU Maxpool");
+		printTensor(upsamplegpuTensor,n, out_c, 10,10,"GPU Upsample");
+	}
+	{
+		GPUInit gpu = GPUInit();
+		int N = 1; // Number of batches
+		int C = 3; // Number of channels
+		int H = 224; // Height
+		int W = 224; // Width
+		int outC = 32;
+		int kh = 3;
+		int kw = 3;
+		std::vector<float> gamma(outC,0.001f); 
+		std::vector<float> beta(outC,0.001f);
+		std::vector<float> mean(outC,0.005f);
+		std::vector<float> variance(outC,0.005f);
+		std::vector<float> filter(outC * C * kh * kw); //(outC, C, kh, kw)
+		std::vector<float> inputTensor(N * C * H * W); //(N,C,H,W)
+		for(auto i=0; i<inputTensor.size();i++){
+			inputTensor[i] = 0.05;
+		}
+		for(auto i=0; i<filter.size();i++){
+			filter[i] = 0.005;
+		}
+			
+		//GPU convolution, BathchNorm, ReLU, Maxpool, Upsample
+		std::vector<float> gpu_convolution = gpu.convolution(inputTensor, filter, N, C, H, W, outC, kh, kw);
+		std::vector<float> gpu_batchnorm   = gpu.batchnormInference(gpu_convolution, gamma, beta,mean, variance,N, outC, H, W);
+		std::vector<float> gpu_relu        = gpu.relu(inputTensor, N, C, H, W);
+		std::vector<float> gpu_maxpool     = gpu.maxpool(inputTensor,N, C, H, W,2);
+		std::vector<float> gpu_upsample    = gpu.upsample(gpu_maxpool, N, C, 112, 112, H, W);
+		
+		saveTensorToNpy("gpu_convolution",gpu_convolution,N, outC, H, W);
+		saveTensorToNpy("gpu_batchnorm",gpu_batchnorm,N, outC, H, W);
+		saveTensorToNpy("gpu_relu",gpu_relu,N, C, H, W);
+		saveTensorToNpy("gpu_maxpool",gpu_maxpool,N, C, H/2, W/2);
+		saveTensorToNpy("gpu_upsample",gpu_upsample,N, C, H, W);
+	}
 
-	std::random_device rd;
-    std::mt19937 gen(rd());
 
-    // Define the distribution range (0, 256)
-    std::uniform_real_distribution<float> dis(0.0f, 256.0f);
-	std::uniform_real_distribution<float> ker(0.0f, 10.0f);
-
-    // Define input dimensions
-    // int N = 1;     // Batch size
-    // int C = 3;     // Channels in the input
-    // int H = 576;    // Height of the input
-    // int W = 576;    // Width of the input
-    // int Kh = 3;    // Kernel height
-    // int Kw = 3;    // Kernel width
-    // int OutC = 64; // Output channels
-    // int stride = 1; // Stride
-    // int padding = 0; // Padding
-
-    // Create buffers for input and kernel
-    //std::vector<float> inputTensor = readImage("/zhome/navanerj/Documents/Conv2d/src/sample.jpg");
-    // std::vector<float> inputTensor(N * C * H * W, 1.0f);//2
-
-	// for(auto i=0; i<inputTensor.size();i++){
-	// 	inputTensor[i] = i+1;
-	// }
-
-    // std::vector<float> kernelTensor(OutC * C * Kh * Kw, 0.5f);
-    // std::vector<float> outputTensor = gpu.convolution(inputTensor, kernelTensor, N, C, H, W, OutC, Kh, Kw, stride, padding);
-	// std::vector<float> flattened_output;
-    // // Perform the convolution
-	// Timer t1("cpu");
-    // convolution_2d_flattened(inputTensor, kernelTensor, flattened_output, N, C, H, W, Kh, Kw);
-	// t1.stop();
-
-	// int outH = ((H + 2 * padding - Kh) / stride) + 1;
-	// int outW = ((W + 2 * padding - Kw) / stride) + 1;
-	// std::vector<float> reluTensor = gpu.relu(outputTensor, N, OutC, outH, outW);
-	// std::vector<float> maxpoolTensor = gpu.maxpool(reluTensor, N, OutC, outH, outW,2);
-	// std::vector<float> meanTensor = gpu.mean(inputTensor, N, C, H, W);
-	// std::vector<float> varianceTensor = gpu.variance(inputTensor, meanTensor,N, C, H, W);
-	// std::vector<float> batchNormTensor = gpu.batchnorm(inputTensor,N, C, H, W);
-
-    int N = 1; // Number of batches
-    int C = 3; // Number of channels
-    int H = 576; // Height
-    int W = 576; // Width
+	    int N = 1; // Number of batches
+	    int C = 3; // Number of channels
+	    int H = 576; // Height
+	    int W = 576; // Width
 
 	int outC = 64;
 	int inC = C;
@@ -879,7 +912,7 @@ int main() {
 	
 	for (size_t i = 0; i < kernel.size(); ++i) {
         kernel[i] = 1;
-    }
+    	}
 
 	
 	// for (size_t i = 0; i < input.size(); ++i) {
