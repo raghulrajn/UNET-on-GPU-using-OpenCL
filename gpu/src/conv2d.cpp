@@ -605,6 +605,21 @@ void compareTensors(std::vector<float> arr1, std::vector<float> arr2, float tole
 	std::cout<<"% of error = "<<((float)count/float(arr1.size()))*100<<std::endl;
 }
 
+void saveTensorToNpy(const std::string& filename,std::vector<float>& data, int N, int C, int H, int W) {
+	std::string fullPath = "./npy/" + filename + ".npy";
+    std::vector<size_t> shape = {N, C, H, W};
+    cnpy::npy_save(fullPath, &data[0], shape, "w");
+}
+
+template <typename T>
+void printVector(const std::vector<T>& vec) {
+    std::cout << "[ ";
+    for (T val : vec) {
+        std::cout << val << " ";
+    }
+    std::cout << "]\n";
+}
+
 // std::vector<float> loadKernelfromNPY(const std::string &filename) {
 //     cnpy::NpyArray arr = cnpy::npy_load(filename);
 //     float* raw_data = arr.data<float>();
@@ -638,29 +653,63 @@ void compareTensors(std::vector<float> arr1, std::vector<float> arr2, float tole
 // }
 
 void saveFlattenedAsJPG(const std::vector<float> &flattened, int N, int C, int H, int W, const std::string &filename) {
-    if (C != 3) {
-        throw std::runtime_error("Only RGB images (C=3) are supported.");
-    }
-    
-    // OpenCV image matrix
-    cv::Mat img(H, W, CV_8UC3);
+    cv::Mat img(H, W, CV_8UC1);
+	std::string fullPath = "./results/" + filename ;
+	// Populate the image from the single-channel flattened array
+	for (int i = 0; i < H; ++i) {
+		for (int j = 0; j < W; ++j) {
+			int index = i * W + j;  // Row-major order
+			img.at<unsigned char>(i, j) = static_cast<unsigned char>(flattened[index] * 255.0f);
+		}
+	}
+	if (!cv::imwrite(fullPath, img)) {
+		throw std::runtime_error("Failed to save image.");
+	}
+}
 
-    // Convert from flattened 1D to 3D RGB image
-    for (int i = 0; i < H; ++i) {
-        for (int j = 0; j < W; ++j) {
-            int index = (i * W + j);  // Row-major order
-            img.at<cv::Vec3b>(i, j) = cv::Vec3b(
-                static_cast<unsigned char>(flattened[index + 2 * H * W] * 255),  // R
-                static_cast<unsigned char>(flattened[index + 1 * H * W] * 255),  // G
-                static_cast<unsigned char>(flattened[index] * 255)              // B
-            );
+//To print the CPU and GPU information of the system
+void getSysInfo() {
+    FILE *fp = popen("grep 'model name' /proc/cpuinfo | head -n 1", "r");
+    if (fp == nullptr) {
+        std::cerr << "Failed to run command." << std::endl;
+        return;
+    }
+    char buffer[256];
+    if (fgets(buffer, sizeof(buffer), fp) != nullptr) {
+        // Find the position of the first colon (:) and skip it
+        char* cpuName = strstr(buffer, ":");
+        if (cpuName != nullptr) {
+            cpuName++;
+            while (*cpuName == ' ') {
+                cpuName++;
+            }
+            std::cout << "CPU: " << cpuName << std::endl;
         }
+    } else {
+        std::cerr << "Error reading the output." << std::endl;
     }
+    pclose(fp);
 
-    // Save as JPG
-    if (!cv::imwrite(filename, img)) {
-        throw std::runtime_error("Failed to save image.");
+	FILE *fp1 = popen("lspci | grep VGA", "r");
+    if (fp1 == nullptr) {
+        std::cerr << "Failed to run command." << std::endl;
+        return;
     }
+    char buffer1[256];
+    if (fgets(buffer1, sizeof(buffer1), fp1) != nullptr) {
+        // Find the position of the first colon (:) and skip it
+        char* gpuName = strstr(buffer1, ": ");
+        if (gpuName != nullptr) {
+            gpuName++;
+            while (*gpuName == ' ') {
+                gpuName++;
+            }
+            std::cout << "GPU: " << gpuName << std::endl;
+        }
+    } else {
+        std::cerr << "Error reading the output." << std::endl;
+    }
+    pclose(fp1);
 }
 
 void printPerformace(GPUInit gpu){
