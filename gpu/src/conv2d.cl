@@ -4,6 +4,8 @@
 * This program implements Conv2D and other supporting functions to implement UNET on the input image as GPU kernels in OpenCL.
 * Project Team:
 * Raghul Raj Navaneethakrishnan (3703553)
+* Vinay Vasant Thute (3701607)
+* Mandar Bhanap (3702680)
 ***********************************************************************************************************************
 */
 
