@@ -55,12 +55,13 @@ Platform Profile                                FULL_PROFILE
 3. Clone cnpy:
 
     ```sh
-git clone https://github.com/rogersce/cnpy.git
-cp cnpy gpc/src
+    git clone https://github.com/rogersce/cnpy.git
+    cp cnpy gpc/src
     ```
+    
 4. Download pretrained-kernel from [ZF_UNET_224](https://github.com/ZFTurbo/ZF_UNET_224_Pretrained_Model/releases/download/v1.0/zf_unet_224.h5)
     ```sh
-python3 extractWeights zf_unet_224.h5
+    python3 extractWeights zf_unet_224.h5
     ```
     Weights and biases are extracted from the model and will be saved in `pretrainedKernels` folder
 
