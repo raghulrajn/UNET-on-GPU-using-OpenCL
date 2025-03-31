@@ -4,14 +4,14 @@ project(
     default_options : [
         'buildtype=debugoptimized',
         'optimization=3',
-        'cpp_std=c++14',
+        'cpp_std=c++17',
         'warning_level=3',
     ],
 )
 
 subdir('lib')
 opencv_dep = dependency('opencv4', required : true)
-#absolute path to be changed
+
 cnpy_dep = declare_dependency(
     include_directories: include_directories('src/cnpy'),
     link_args: ['/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/libcnpy.a', '-lz']

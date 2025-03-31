@@ -1,5 +1,18 @@
 #!/bin/bash
 
+#Check if an argument is provided
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <file.npy>"
+  exit 1
+fi
+
+# Validate the file extension
+INPUT_FILE="$1"
+if [[ "$INPUT_FILE" != *.npy ]]; then
+  echo "Error: The input file must have a .npy extension."
+  exit 1
+fi
+
 # Set the build directory
 BUILD_DIR="build"
 
@@ -20,7 +33,7 @@ EXECUTABLE=$(find "$BUILD_DIR" -type f -executable -print -quit)
 # Run the executable if it exists
 if [ -x "$EXECUTABLE" ]; then
   echo "Running the project:"
-  "$EXECUTABLE"
+  "$EXECUTABLE" $INPUT_FILE
 else
   echo "Executable not found in $BUILD_DIR"
 fi

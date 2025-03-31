@@ -1,0 +1,6 @@
+**/kernels/
+**/cnpy/
+**/libtorch/
+**/.vscode/
+**/batchnorm/
+zf_unet_224.h5

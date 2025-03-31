@@ -1,0 +1,9 @@
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/cnpy.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/cnpy-static.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/example1.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/edit_cache.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/rebuild_cache.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/list_install_components.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/install.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/install/local.dir
+/home/raghul/Desktop/conv2d/CPU/OpenCL/gpu/src/cnpy/build/CMakeFiles/install/strip.dir
