@@ -124,3 +124,27 @@ def ZF_UNET_224(dropout_val=0.2, weights=None):
         model.load_weights(weights_path)
 
     return model
+
+## INFERENCE CODE
+model = ZF_UNET_224(weights='generator')
+img = cv2.imread('/content/img1.png')
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+img = cv2.resize(img, (224, 224))
+img_input = preprocess_input(img)
+img_input = np.expand_dims(img_input, axis=0)
+
+prediction = model.predict(img_input)
+prediction = np.squeeze(prediction, axis=0)
+
+plt.figure(figsize=(10, 5))
+plt.subplot(1, 2, 1)
+plt.imshow(img)
+plt.title('Original Image')
+plt.axis('off')
+
+plt.subplot(1, 2, 2)
+plt.imshow(prediction[:, :, 0], cmap='gray')
+plt.title('Prediction Mask')
+plt.axis('off')
+plt.show()
